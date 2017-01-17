@@ -12,7 +12,7 @@
  *    tgit23        12/2016       Original
 ******************************************************************************/
 #define DEBUG 1                 // 1 for DEBUG
-#include "PeerIOSerialControl.h"
+#include <PeerIOSerialControl.h>
 
 #define SS_TX_PIN 8             // XBee DIN 
 #define SS_RX_PIN 9             // XBee DOUT
