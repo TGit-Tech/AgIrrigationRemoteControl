@@ -1,24 +1,19 @@
-/************************************************************************//**
- *  @brief  Arduino Sketch to be loaded onto the Irrigation Pump Remote Hand-Held unit.
- *    see:
-  note: 2x16 characters on display
-  Arduino/Genuino Uno is a microcontroller board based on the ATmega328P
-  https://www.arduino.cc/en/Main/ArduinoBoardUno
-  1KB of EEPROM memory
- *  @code
- *    exmaple code
- *  @endcode
- *  @authors 
- *    tgit23        12/2016       Original
-******************************************************************************/
+/*********************************************************************************//**
+ * @brief  Arduino Sketch firmware to be uploaded onto the Ag-Irrigation Hand-Remote 
+ * @see https://github.com/tgit23/AgIrrigationRemoteControl
+ * @todo
+ *  - Need a good way to monitor multiple pumps
+ * @authors 
+ *    tgit23        01/2017       Original
+*************************************************************************************/
 #include <LiquidCrystal.h>
 #include <EEPROM.h>
-#include <PeerIOSerialControl.h>
+#include <PeerIOSerialControl.h> //See https://github.com/tgit23/PeerIOSerialControl
 #define DEBUG 1
 #if DEBUG>0
   #define DBL(x) Serial.println x
   #define DB(x) Serial.print x
-  #define DBC Serial.print(",")
+  #define DBC Serial.print(", ")
 #else
   #define DBL(x)
   #define DB(x)
@@ -33,16 +28,17 @@
 LiquidCrystal lcd(8, 9, 4, 5, 6, 7);          // select the pins used on the LCD panel
 
 //---[ PROGRAM BEHAVIOR SETTINGS ]----------------------------------------------------
-#define WAIT_REPLY_MS 1000              // How long to wait for a XBee reply
-#define START_STATUS_ITERATE  15000     // Start iterating statuses after (ms)
+#define WAIT_REPLY_MS         1000      // How long to wait for a XBee reply
+#define START_STATUS_ITERATE  15000     // Start iterating statuses after idle (ms)
 #define ITERATE_EVERY         3000      // Iterate Status every (ms)
 
 //---[ STATIC SETTINGS ]---------------------------------------------------------------
-#define MAIN 0      // The current/true value of the Menu Item
-#define SET 1       // Value used to SET a MAIN-Value
-#define LOALARM 2   // Value used for Low Alarm
-#define HIALARM 3   // Value used for High Alarm
-#define VALITEMS 4  // Total number of Value's
+// Val[] Indexes
+#define MAIN 0                // The current-read value of the Menu Item
+#define SET 1                 // Value used to SET a MAIN-Value
+#define LOALARM 2             // Value used for a Low Alarm on MAIN-Value
+#define HIALARM 3             // Value used for a High Alarm on MAIN-Value
+#define VALITEMS 4            // Total number of Value's per Menu Item
 
 // Setup a Software Serial for XBEE (Allows Debug)
 #include <SoftwareSerial.h>
@@ -60,23 +56,32 @@ int ValIdx = MAIN;
 //---[ MENU STRUCTURE ]----------------------------------------------------------------
 #define MENUITEMS 5                           // # of Menu Items ( 1 + index )
 #define MAXOPTIONS 2                          // Maximum # of Options allowed
-#define PUMPIDX 0                             // Menu-idx of Select Remote Pump Location
+#define PUMPIDX 0                             // Menu-idx of Select Pump Location
 #define PUMPADDR 1020                         // EEPROM address to store Selected Pump
 #define STARTIDX 1                            // First Menu item displayed after reset
 
+/*********************************************************************************//**
+ * @brief  User-defined data structure for Menu Items that use a Pick-Option method
+*************************************************************************************/
 struct uItemOption {
   char *Text;
   int Value = LOW;
-  uint8_t PumpID = 0;
+  uint8_t PumpID = 0;                         // Special place for Target AduinoID
 };
 
+/*********************************************************************************//**
+ * @brief  User-defined data structure for MAIN, SET, LOALARM, HIALARM Values.
+*************************************************************************************/
 struct uValues {
   int Value = -1;
   int ToneHz = 1000;
-  char ID = NULL;         // On ALARM'S; A set ID activates the alarm setting in the menu
+  char ID = NULL;         // A set ID activates the alarm setting in the menu
   bool Active = false;    // [MAIN]Active=Valid, [SET]Active=Settable, ALARM=Is ON
 };
 
+/*********************************************************************************//**
+ * @brief  User-defined data structure for every Menu Item ( Value ) on the Unit
+*************************************************************************************/
 struct MenuItems {
   char *Text;
   uValues Val[VALITEMS];
@@ -87,27 +92,20 @@ struct MenuItems {
   bool Poll=true;
 } Menu[MENUITEMS];
 
-/************************************************************************//**
- *  @brief  Record Menu Items Values in EEPROM non-volitale memory.
- *    see:
- *  STORE 'EPROM' SET VALUES IN EEPROM
- *  UNO offers 1024-bytes or 146 - total 7-Byte Variable Storage
- *  We will limit this to 980 (140x7-byte) values to allow Pump Setting @ over 1000-Address
- *  For 4-Pump Options results in ( 35-Menu.Items x 4-pumps x 7-bytes ) = 980-bytes
- *  245-bytes per pump
- *  Address = (Menu index * 6-byte-integer) + Pump Offset
- *  Address = ((Menu-idx * (int)2-bytes) + (Menu[Pump].Value * 200)
- *  Example; Pump#0 Addresses @(0-199) - allowing 66 Menu Items (int value & status byte)
- *  Example; Pump#1 Addresses @(200-399) - allowing 66 (3-byte) values
- *  Therefore; Addressing support 99-Menu items on 4-pumps (4*200 = 800 + 200values = 1000B)
+/*********************************************************************************//**
+ * @brief  Record Menu Item Values in EEPROM non-volitale memory.
+ * @remarks
+ * - Arduino UNO offers 1024-bytes or (146)7-Byte Menu Item Storage
+ * - Using 980-bytes or (140)7-Byte Values allowing Pump Select over byte 1000-Address
+ * - Limits (4)Pumps with (35)7-Byte Values = (245)Bytes per Pump or (980)Bytes Total
+ * - This function is also called on all Menu Items to set Alarm values into EEPROM.
  *  @code
  *    exmaple code
  *  @endcode
- *  @authors 
- *    tgit23        12/2016       Original
-******************************************************************************/
+*************************************************************************************/
 void EEPROMSet(int i = -1) {
   if ( i == -1 ) i = idx;DBL(("EEPROMSet()"));
+  int iPumpOffset = Menu[PUMPIDX].Val[MAIN].Value * 245;
   
   if ( i == PUMPIDX ) {
     EEPROM.update(PUMPADDR,(char)Menu[i].Val[MAIN].Value);    // Write
@@ -116,14 +114,17 @@ void EEPROMSet(int i = -1) {
   
   } else {
     // Store Value in EEPROM
-    int iPumpOffset = Menu[PUMPIDX].Val[MAIN].Value * 245;
     if ( Menu[i].ValueLocation == EPROM ) {
       byte valLowByte = ((Menu[i].Val[MAIN].Value >> 0) & 0xFF);
       byte valHighByte = ((Menu[i].Val[MAIN].Value >> 8) & 0xFF);
+      
       EEPROM.update( (i*7+0)+iPumpOffset, valLowByte);
-      DB(("EEPROM.update( "));DB(((i*7+0)+iPumpOffset));DB((", "));DB((valLowByte, HEX));DBL((")"));
+      DB(("EEPROM.update( "));DB(((i*7+0)+iPumpOffset));
+      DBC;DB((valLowByte, HEX));DBL((")"));
+      
       EEPROM.update( (i*7+1)+iPumpOffset, valHighByte);
-      DB(("EEPROM.update( "));DB(((i*7+1)+iPumpOffset));DB((", "));DB((valHighByte, HEX));DBL((")"));
+      DB(("EEPROM.update( "));DB(((i*7+1)+iPumpOffset));
+      DBC;DB((valHighByte, HEX));DBL((")"));
     }
     
     // Store Alarm Values in EEPROM
@@ -134,22 +135,36 @@ void EEPROMSet(int i = -1) {
     byte AlarmSet = 0x22;   // 2=OFF, A=ON
     if ( Menu[i].Val[LOALARM].Active ) bitSet(AlarmSet,3);
     if ( Menu[i].Val[HIALARM].Active ) bitSet(AlarmSet,7);
+    
     EEPROM.update( (i*7+2)+iPumpOffset, loAlarmLoByte);
-    DB(("EEPROM.update( "));DB(((i*7+2)+iPumpOffset));DB((", "));DB((loAlarmLoByte, HEX));DBL((")"));
+    DB(("EEPROM.update( "));DB(((i*7+2)+iPumpOffset));
+    DBC;DB((loAlarmLoByte, HEX));DBL((")"));
+    
     EEPROM.update( (i*7+3)+iPumpOffset, loAlarmHiByte);
-    DB(("EEPROM.update( "));DB(((i*7+3)+iPumpOffset));DB((", "));DB((loAlarmHiByte, HEX));DBL((")"));
+    DB(("EEPROM.update( "));DB(((i*7+3)+iPumpOffset));
+    DBC;DB((loAlarmHiByte, HEX));DBL((")"));
+    
     EEPROM.update( (i*7+4)+iPumpOffset, hiAlarmLoByte);
-    DB(("EEPROM.update( "));DB(((i*7+4)+iPumpOffset));DB((", "));DB((hiAlarmLoByte, HEX));DBL((")"));
+    DB(("EEPROM.update( "));DB(((i*7+4)+iPumpOffset));
+    DBC;DB((hiAlarmLoByte, HEX));DBL((")"));
+    
     EEPROM.update( (i*7+5)+iPumpOffset, hiAlarmHiByte);
-    DB(("EEPROM.update( "));DB(((i*7+5)+iPumpOffset));DB((", "));DB((hiAlarmHiByte, HEX));DBL((")"));
+    DB(("EEPROM.update( "));DB(((i*7+5)+iPumpOffset));
+    DBC;DB((hiAlarmHiByte, HEX));DBL((")"));
+    
     EEPROM.update( (i*7+6)+iPumpOffset, AlarmSet);
-    DB(("EEPROM.update( "));DB(((i*7+6)+iPumpOffset));DB((", "));DB((AlarmSet, HEX));DBL((")"));
+    DB(("EEPROM.update( "));DB(((i*7+6)+iPumpOffset));
+    DBC;DB((AlarmSet, HEX));DBL((")"));
   }
 }
-//vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
-// EEPROMGet() - 6 bytes per Menu Item
-//-----------------------------------------------------------------------------------------
-//This function will read a 2 byte integer from the eeprom at the specified address and address + 1
+
+/*********************************************************************************//**
+ * @brief  Read Menu Item Values from Arduino EEPROM non-volitale memory.
+ * @see    EEPROMSet for Addressing notation
+ * @code
+ *   exmaple code
+ * @endcode
+*************************************************************************************/
 void EEPROMGet(int i = -1) {
   byte StatusByte = 0;
   if ( i == -1 ) i = idx;
@@ -158,19 +173,20 @@ void EEPROMGet(int i = -1) {
     Menu[i].Val[MAIN].Value = (int)EEPROM.read(PUMPADDR);
     if (EEPROM.read(PUMPADDR+1) == 0x22) Menu[i].Val[MAIN].Active = true;
   } else {
-    // Get Value from EEPROM
+    // Get Values from EEPROM
+    int iPumpOffset = Menu[PUMPIDX].Val[MAIN].Value * 245;
     if ( Menu[i].ValueLocation == EPROM ) {
-      byte valLowByte = EEPROM.read( ((i*7+0)+(Menu[PUMPIDX].Val[MAIN].Value*245)) );
-      byte valHighByte = EEPROM.read( ((i*7+1)+(Menu[PUMPIDX].Val[MAIN].Value*245)) );
+      byte valLowByte = EEPROM.read( ((i*7+0)+iPumpOffset) );
+      byte valHighByte = EEPROM.read( ((i*7+1)+iPumpOffset) );
       Menu[i].Val[MAIN].Value = (int)((valLowByte << 0) & 0xFF) + ((valHighByte << 8) & 0xFF00);
     }
 
     // Get Alarm Values from EEPROM
-    byte loAlarmLoByte = EEPROM.read( ((i*7+2)+(Menu[PUMPIDX].Val[MAIN].Value*245)) );
-    byte loAlarmHiByte = EEPROM.read( ((i*7+3)+(Menu[PUMPIDX].Val[MAIN].Value*245)) );
-    byte hiAlarmLoByte = EEPROM.read( ((i*7+4)+(Menu[PUMPIDX].Val[MAIN].Value*245)) );
-    byte hiAlarmHiByte = EEPROM.read( ((i*7+5)+(Menu[PUMPIDX].Val[MAIN].Value*245)) );
-    byte AlarmSet = EEPROM.read( ((i*7+6)+(Menu[PUMPIDX].Val[MAIN].Value*245)) );
+    byte loAlarmLoByte = EEPROM.read( ((i*7+2)+iPumpOffset) );
+    byte loAlarmHiByte = EEPROM.read( ((i*7+3)+iPumpOffset) );
+    byte hiAlarmLoByte = EEPROM.read( ((i*7+4)+iPumpOffset) );
+    byte hiAlarmHiByte = EEPROM.read( ((i*7+5)+iPumpOffset) );
+    byte AlarmSet = EEPROM.read( ((i*7+6)+iPumpOffset) );
     
     Menu[i].Val[LOALARM].Value = (int)((loAlarmLoByte << 0) & 0xFF) + ((loAlarmHiByte << 8) & 0xFF00);
     Menu[i].Val[HIALARM].Value = (int)((hiAlarmLoByte << 0) & 0xFF) + ((hiAlarmHiByte << 8) & 0xFF00);
@@ -185,9 +201,12 @@ void EEPROMGet(int i = -1) {
 
 }
 
-//vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
-// SetPump()
-//-----------------------------------------------------------------------------------------
+/*********************************************************************************//**
+ * @brief  Preforms all needed changes to the system when changing a Selected Pump.
+ * @code
+ *   exmaple code
+ * @endcode
+*************************************************************************************/
 void SetPump(int PumpID) {
   
   if ( PumpID != XBee.TargetArduinoID() ) {
@@ -201,63 +220,18 @@ void SetPump(int PumpID) {
   }
   
 }
-//vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
-// SetItem()
-//-----------------------------------------------------------------------------------------
-void SetItem(int i = -1) {
-  if ( i == -1 ) i = idx;int iSetValue = 0;DBL(("SetItem()"));
-  if ( i != PUMPIDX && !Menu[PUMPIDX].Val[MAIN].Active ) return;  // No control till a pump is selected
 
-  // Toggle Alarm
-  if ( ValIdx == LOALARM || ValIdx == HIALARM ) {
-    Menu[i].Val[ValIdx].Active = !Menu[i].Val[ValIdx].Active;
-    if ( Menu[i].ValueLocation != EPROM ) EEPROMSet();
-  }
-
-  if ( ValIdx != SET ) return;
-  
-  // Obtain the Set Value
-  iSetValue = Menu[i].Val[SET].Value;
-  if ( Menu[i].LastOption > 0 ) {
-    if (Menu[i].Val[SET].Value < 0 || Menu[i].Val[SET].Value > MAXOPTIONS) return;
-    iSetValue = Menu[i].Option[Menu[i].Val[SET].Value].Value;
-  }
-  Menu[i].Val[MAIN].Active = false; // Remove the last Read Value; its changing
-
-  switch ( Menu[i].ValueLocation ) {
-    case EPROM:
-      Menu[i].Val[MAIN].Value = Menu[i].Val[SET].Value;   // Set the Value
-      EEPROMSet();                                        // Write the Value to EEPROM
-      Menu[i].Val[MAIN].Active = true;                    // Validate
-      if ( i == PUMPIDX ) SetPump( Menu[i].Option[ Menu[i].Val[MAIN].Value ].PumpID );
-      break;
-
-    case LOCALPIN_DIGITAL:
-      Menu[i].Val[MAIN].Active = true;
-      digitalWrite(Menu[i].Pin, iSetValue);
-      break;
-
-    case LOCALPIN_ANALOG:
-      analogWrite(Menu[i].Pin, iSetValue);
-      break;
-
-    case REMOTEPIN_DIGITAL:
-      XBee.digitalWriteNB(Menu[i].Pin, iSetValue);
-      break;
-
-    case REMOTEPIN_ANALOG:
-      XBee.analogWriteNB(Menu[i].Pin, iSetValue);
-      break;
-  }
-}
-//vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
-// GetItem()
-// Baterry reads 458 when running off USB and 856 when running from 9VDC battery
-//
-//-----------------------------------------------------------------------------------------
+/*********************************************************************************//**
+ * @brief  Obtain menu values and compare them against their alarm values
+ * @remarks
+ *  - Battery read 458 when running off USB and 856 when running from 9VDC Battery.
+ * @code
+ *   exmaple code
+ * @endcode
+*************************************************************************************/
 void GetItem(int i = -1) {
   if ( i == -1 ) i = idx;DBL(("GetItem()"));
-  int iReply = -1;
+
   // Make sure we have a valid Pump Selected
   if ( i != PUMPIDX && !Menu[PUMPIDX].Val[MAIN].Active ) return;
 
@@ -278,22 +252,87 @@ void GetItem(int i = -1) {
 
   // Check this Value for an Active Alarm
   if ( Menu[i].Val[MAIN].Active ) {
-    if ( Menu[i].Val[LOALARM].Active ) {
+    if ( Menu[i].Val[LOALARM].Active && Menu[i].Val[LOALARM].ID != NULL ) {
       if ( Menu[i].LastOption > 0 ) {
         if ( Menu[i].Val[MAIN].Value == Menu[i].Val[LOALARM].Value ) tone(SBUZZ,Menu[i].Val[LOALARM].ToneHz);
       } else {
         if ( Menu[i].Val[MAIN].Value < Menu[i].Val[LOALARM].Value ) tone(SBUZZ, Menu[i].Val[LOALARM].ToneHz);
       }
     }
-    if ( Menu[i].Val[HIALARM].Active ) {
+    if ( Menu[i].Val[HIALARM].Active && Menu[i].Val[HIALARM].ID != NULL ) {
       if ( Menu[i].Val[MAIN].Value > Menu[i].Val[HIALARM].Value ) tone(SBUZZ, Menu[i].Val[HIALARM].ToneHz);
     }
   }
 }
 
-//vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
-// SetupMenu()
-//-----------------------------------------------------------------------------------------
+/*********************************************************************************//**
+ * @brief  Preform value setting and recording when the 'Select' button is pressed.
+ * @code
+ *   exmaple code
+ * @endcode
+*************************************************************************************/
+void SetItem(int i = -1) {
+  if ( i == -1 ) i = idx;int iSetValue = 0;DBL(("SetItem()"));
+  if ( i != PUMPIDX && !Menu[PUMPIDX].Val[MAIN].Active ) return;  // No control till a pump is selected
+
+  // ALARM - If viewing an Alarm Value - Select will Toggle the Alarm ON/OFF
+  if ( ValIdx == LOALARM || ValIdx == HIALARM ) {
+    Menu[i].Val[ValIdx].Active = !Menu[i].Val[ValIdx].Active;
+    if ( Menu[i].ValueLocation != EPROM ) EEPROMSet();
+
+  // MAIN - If viewing a 'MAIN' Value; Select will Refresh the Value
+  } else if ( ValIdx == MAIN ) {
+    GetItem();
+
+  // SET - If viewing a 'SET' Value; Select will Set the Value
+  } else if ( ValIdx == SET ) {
+
+    if ( ValIdx != SET ) return;
+  
+    // Obtain the Set Value
+    iSetValue = Menu[i].Val[SET].Value;
+    if ( Menu[i].LastOption > 0 ) {
+      if (Menu[i].Val[SET].Value < 0 || Menu[i].Val[SET].Value > MAXOPTIONS) return;
+      iSetValue = Menu[i].Option[Menu[i].Val[SET].Value].Value;
+    }
+    Menu[i].Val[MAIN].Active = false; // Remove the last Read Value; its changing
+
+    switch ( Menu[i].ValueLocation ) {
+      case EPROM:
+        Menu[i].Val[MAIN].Value = Menu[i].Val[SET].Value;   // Set the Value
+        EEPROMSet();                                        // Write the Value to EEPROM
+        Menu[i].Val[MAIN].Active = true;                    // Validate
+        if ( i == PUMPIDX ) SetPump( Menu[i].Option[ Menu[i].Val[MAIN].Value ].PumpID );
+        break;
+
+      case LOCALPIN_DIGITAL:
+        Menu[i].Val[MAIN].Active = true;
+        digitalWrite(Menu[i].Pin, iSetValue);
+        break;
+
+      case LOCALPIN_ANALOG:
+        analogWrite(Menu[i].Pin, iSetValue);
+        break;
+
+      case REMOTEPIN_DIGITAL:
+        XBee.digitalWriteNB(Menu[i].Pin, iSetValue);
+        break;
+
+      case REMOTEPIN_ANALOG:
+        XBee.analogWriteNB(Menu[i].Pin, iSetValue);
+        break;
+    }
+  }
+}
+
+/*********************************************************************************//**
+ * @brief  Setup the LCD menu
+ * @remarks
+ * - Allows a single spot customization to users configuration
+ * @code
+ *   exmaple code
+ * @endcode
+*************************************************************************************/
 void SetupMenu() {
 
   // Be sure to change 'MENUITEMS' when adding/deleting items
@@ -314,13 +353,13 @@ void SetupMenu() {
   Menu[1].Option[1].Text = "On";
   Menu[1].Option[1].Value = HIGH;
   Menu[1].LastOption = 1;
-  Menu[1].Pin = 5;
+  Menu[1].Pin = 7;
   Menu[1].Val[SET].Active = true;             // Allows Value to be 'SET'
   Menu[1].Val[LOALARM].ID = 'p';
 
   Menu[2].Text = "Water L.";
   Menu[2].ValueLocation = REMOTEPIN_ANALOG; 
-  Menu[2].Pin = 5;
+  Menu[2].Pin = 64;
   Menu[2].Val[LOALARM].ID = 'l';
   Menu[2].Val[HIALARM].ID = 'L';
   
@@ -331,7 +370,7 @@ void SetupMenu() {
   
   Menu[4].Text = "Pressure";
   Menu[4].ValueLocation = REMOTEPIN_ANALOG;
-  Menu[4].Pin = 7;
+  Menu[4].Pin = 0;
   Menu[4].Val[LOALARM].ID='r';
   Menu[4].Val[HIALARM].ID='R';
     
@@ -341,23 +380,12 @@ void SetupMenu() {
   idx = STARTIDX;
 }
 
-//vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
-// read_LCD_Buttons()
-//-----------------------------------------------------------------------------------------
-Button read_LCD_buttons(){               // read the buttons
-    int adc_key_in = analogRead(0);       // read the value from the sensor 
-    if (adc_key_in > 1000) return NONE; 
-    if (adc_key_in < 50)   return RIGHT;  
-    if (adc_key_in < 195)  return UP; 
-    if (adc_key_in < 380)  return DOWN; 
-    if (adc_key_in < 555)  return LEFT; 
-    if (adc_key_in < 790)  return SELECT;   
-    return NONE;                // when all others fail, return this.
-}
-
-//vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
-// LCD_display()
-//-----------------------------------------------------------------------------------------
+/*********************************************************************************//**
+ * @brief  Properly display a Menu Item on the LCD screen
+ * @code
+ *   exmaple code
+ * @endcode
+*************************************************************************************/
 void LCD_display() {
   
   // Top Row (Status)
@@ -420,10 +448,14 @@ void LCD_display() {
 }
 
 
-//vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
-// Setup()
-// See:     Q1-Backlit shorting issue; http://forum.arduino.cc/index.php?topic=96747.0
-//-----------------------------------------------------------------------------------------
+/*********************************************************************************//**
+ * @brief  Arduino Sketch Setup routine - Initialize the environment.
+ * @remarks
+ * - pin#10 INPUT Backlit shorting see http://forum.arduino.cc/index.php?topic=96747.0
+ * @code
+ *   exmaple code
+ * @endcode
+*************************************************************************************/
 void setup(){
     pinMode(10,INPUT);            // Fix for Q1-LCD Backlit shorting issue
     pinMode(SBUZZ,OUTPUT);
@@ -438,13 +470,30 @@ void setup(){
     LCD_display();                // Display the main menu
 }
 
-//vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
-// Loop()
-//-----------------------------------------------------------------------------------------
+/*********************************************************************************//**
+ * @brief  Arduino Sketch Loop() routine
+ * @remarks
+ * - This function is called automatically over-and-over by Arduino
+ * - Handles incoming XBee communications
+ * - Handles button presses and LCD response updates
+ * - Handles Menu iteratation during idle.
+*************************************************************************************/
 void loop(){
-  Button bpress = read_LCD_buttons();
+
+  // Check for a button press
+  Button bpress = NONE;
+  int adc_key_in = analogRead(0);
+  if (adc_key_in > 1000) { bpress = NONE; }
+  else if (adc_key_in < 50) { bpress = RIGHT; }
+  else if (adc_key_in < 195) { bpress = UP; }
+  else if (adc_key_in < 380) { bpress = DOWN; }
+  else if (adc_key_in < 555) { bpress = LEFT; }
+  else if (adc_key_in < 790) { bpress = SELECT; }
+
+  // Check for incoming communications
   XBee.Available();
-  
+
+  // Preform duties
   if(bpress == NONE) {
     if ( millis() - last_bpress > START_STATUS_ITERATE && 
          millis() - last_change > ITERATE_EVERY ) {
