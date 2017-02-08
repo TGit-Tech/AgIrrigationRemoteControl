@@ -1,0 +1,86 @@
+solid SideCover
+facet normal 0.0 0.0 -1.0
+  outer loop
+    vertex 61.0 36.0 0.0
+    vertex 0.0 0.0 0.0
+    vertex 0.0 36.0 0.0
+  endloop
+endfacet
+facet normal 0.0 0.0 -1.0
+  outer loop
+    vertex 0.0 0.0 0.0
+    vertex 61.0 36.0 0.0
+    vertex 61.0 0.0 0.0
+  endloop
+endfacet
+facet normal -0.0 -0.0 1.0
+  outer loop
+    vertex 61.0 0.0 1.5
+    vertex 0.0 36.0 1.5
+    vertex 0.0 0.0 1.5
+  endloop
+endfacet
+facet normal -0.0 -0.0 1.0
+  outer loop
+    vertex 0.0 36.0 1.5
+    vertex 61.0 0.0 1.5
+    vertex 61.0 36.0 1.5
+  endloop
+endfacet
+facet normal 1.0 0.0 0.0
+  outer loop
+    vertex 61.0 36.0 0.0
+    vertex 61.0 0.0 1.5
+    vertex 61.0 0.0 0.0
+  endloop
+endfacet
+facet normal 1.0 0.0 0.0
+  outer loop
+    vertex 61.0 0.0 1.5
+    vertex 61.0 36.0 0.0
+    vertex 61.0 36.0 1.5
+  endloop
+endfacet
+facet normal -0.0 -1.0 -0.0
+  outer loop
+    vertex 61.0 0.0 1.5
+    vertex 0.0 0.0 0.0
+    vertex 61.0 0.0 0.0
+  endloop
+endfacet
+facet normal -0.0 -1.0 -0.0
+  outer loop
+    vertex 0.0 0.0 0.0
+    vertex 61.0 0.0 1.5
+    vertex 0.0 0.0 1.5
+  endloop
+endfacet
+facet normal -1.0 0.0 0.0
+  outer loop
+    vertex 0.0 36.0 1.5
+    vertex 0.0 0.0 0.0
+    vertex 0.0 0.0 1.5
+  endloop
+endfacet
+facet normal -1.0 0.0 0.0
+  outer loop
+    vertex 0.0 0.0 0.0
+    vertex 0.0 36.0 1.5
+    vertex 0.0 36.0 0.0
+  endloop
+endfacet
+facet normal -0.0 1.0 0.0
+  outer loop
+    vertex 0.0 36.0 1.5
+    vertex 61.0 36.0 0.0
+    vertex 0.0 36.0 0.0
+  endloop
+endfacet
+facet normal -0.0 1.0 0.0
+  outer loop
+    vertex 61.0 36.0 0.0
+    vertex 0.0 36.0 1.5
+    vertex 61.0 36.0 1.5
+  endloop
+endfacet
+endsolid SideCover
