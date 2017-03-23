@@ -3,13 +3,54 @@
  * @see https://github.com/tgit23/AgIrrigationRemoteControl
  * @todo
  *  - Need a good way to monitor multiple pumps
+ *  - Need a RESET option that initializes EEPROM and programs XBEE
  * @authors 
  *    tgit23        01/2017       Original
 *************************************************************************************/
 #include <LiquidCrystal.h>
 #include <EEPROM.h>
-#include <PeerIOSerialControl.h> //See https://github.com/tgit23/PeerIOSerialControl
-#define DEBUG 1
+#include <PeerIOSerialControl.h>        //See https://github.com/tgit23/PeerIOSerialControl
+#include <SoftwareSerial.h>
+
+#define TRANSCEIVER_ID 1                // A unique ID for this unit
+#define DEBUG 1                         // 0=OFF, 1=ON
+
+//---[ UNO PIN SETTINGS ]--------------------------------------------------------------
+#define SBUZZ 2                         // Signal-Pin on Buzzer ( D2 )
+#define SS_TX_PIN 11                    // TX -> XBEE-DIN ( Closest to UNO )
+#define SS_RX_PIN 12                    // RX -> XBEE-DOUT ( Farthest from UNO )
+#define BATT_PIN 1                      // Voltage divider on 9V Battery ( A1 )
+LiquidCrystal lcd(8, 9, 4, 5, 6, 7);    // select the pins used on the LCD panel
+
+//---[ PROGRAM BEHAVIOR SETTINGS ]----------------------------------------------------
+#define WAIT_REPLY_MS         1000      // How long to wait for a XBee reply
+#define START_STATUS_ITERATE  15000     // Start iterating statuses after idle (ms)
+#define ITERATE_EVERY         3000      // Iterate Status every (ms)
+
+//---[ CONSTANTS ]---------------------------------------------------------------------
+enum Button { UP, DOWN, RIGHT, LEFT, SELECT, NONE };
+enum eValueLocation { 
+  PROG, 
+  LOCALPIN_DIGITAL, LOCALPIN_ANALOG, 
+  REMOTEPIN_DIGITAL, REMOTEPIN_ANALOG, 
+  EPROM };
+
+//---[ SETUP VAL() INDEXES ]--------------------------------------------------------
+// Val[] Indexes
+#define MAIN 0                          // The current-read value of the Menu Item
+#define SET 1                           // Value used to SET a MAIN-Value
+#define LOALARM 2                       // Value used for a Low Alarm on MAIN-Value
+#define HIALARM 3                       // Value used for a High Alarm on MAIN-Value
+#define VALITEMS 4                      // Total number of Value's per Menu Item
+
+//---[ MENU STRUCTURE ]----------------------------------------------------------------
+#define MENUITEMS 5                           // # of Menu Items ( 1 + index )
+#define MAXOPTIONS 2                          // Maximum # of Options allowed
+#define PUMPIDX 0                             // Menu-idx of Select Pump Location
+#define PUMPADDR 1020                         // EEPROM address to store Selected Pump
+#define STARTIDX 1                            // First Menu item displayed after reset
+
+//---[ SETUP DEBUG ]-------------------------------------------------------------------
 #if DEBUG>0
   #define DBL(x) Serial.println x
   #define DB(x) Serial.print x
@@ -20,45 +61,15 @@
   #define DBC  
 #endif
 
-//---[ IO-PIN SETTINGS ]--------------------------------------------------------------
-#define SBUZZ 2                 // Signal-Pin on Buzzer
-#define SS_TX_PIN 11            // Pin 2 is used by Buzzer
-#define SS_RX_PIN 12            // Pin 10 is input backlight LCD; pin 8,9 are LCD
-#define BATT_PIN 1
-LiquidCrystal lcd(8, 9, 4, 5, 6, 7);          // select the pins used on the LCD panel
-
-//---[ PROGRAM BEHAVIOR SETTINGS ]----------------------------------------------------
-#define WAIT_REPLY_MS         1000      // How long to wait for a XBee reply
-#define START_STATUS_ITERATE  15000     // Start iterating statuses after idle (ms)
-#define ITERATE_EVERY         3000      // Iterate Status every (ms)
-
-//---[ STATIC SETTINGS ]---------------------------------------------------------------
-// Val[] Indexes
-#define MAIN 0                // The current-read value of the Menu Item
-#define SET 1                 // Value used to SET a MAIN-Value
-#define LOALARM 2             // Value used for a Low Alarm on MAIN-Value
-#define HIALARM 3             // Value used for a High Alarm on MAIN-Value
-#define VALITEMS 4            // Total number of Value's per Menu Item
-
-// Setup a Software Serial for XBEE (Allows Debug)
-#include <SoftwareSerial.h>
+//---[ INITIALIZE COMMUNICATIONS ]-----------------------------------------------------
 SoftwareSerial IOSerial(SS_RX_PIN,SS_TX_PIN);   // ( rxPin, txPin )
-PeerIOSerialControl XBee(1,IOSerial,Serial);    // ArduinoID, IOSerial, DebugSerial
+PeerIOSerialControl XBee(TRANSCEIVER_ID,IOSerial,Serial); // ArduinoID, IOSerial, DebugSerial
 
-enum Button { UP, DOWN, RIGHT, LEFT, SELECT, NONE };
-enum eValueLocation { 
-  PROG, LOCALPIN_DIGITAL, LOCALPIN_ANALOG, REMOTEPIN_DIGITAL, REMOTEPIN_ANALOG, EPROM };
+//---[ GLOBAL VARIABLES ]--------------------------------------------------------------
 unsigned long last_bpress = 0;                // Track last button press time
 unsigned long last_change = 0;                // Track last status iteration time
-int idx = 0;
-int ValIdx = MAIN;
-
-//---[ MENU STRUCTURE ]----------------------------------------------------------------
-#define MENUITEMS 5                           // # of Menu Items ( 1 + index )
-#define MAXOPTIONS 2                          // Maximum # of Options allowed
-#define PUMPIDX 0                             // Menu-idx of Select Pump Location
-#define PUMPADDR 1020                         // EEPROM address to store Selected Pump
-#define STARTIDX 1                            // First Menu item displayed after reset
+int idx = 0;                                  // Track Menu index item
+int ValIdx = MAIN;                            // Track current menu value item
 
 /*********************************************************************************//**
  * @brief  User-defined data structure for Menu Items that use a Pick-Option method
