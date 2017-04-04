@@ -1,4 +1,4 @@
-/************************************************************************//**
+/*********************************************************************************//**
  *  @brief  Arduino Sketch to be loaded onto the Irrigation Pump Controller.
  *    see:
  *  @code
@@ -6,8 +6,15 @@
  *  @endcode
  *  @authors 
  *    tgit23        12/2016       Original
-******************************************************************************/
+*************************************************************************************/
+#include <PeerIOSerialControl.h> //See https://github.com/tgit23/PeerIOSerialControl
+#include <SoftwareSerial.h>
+
+#define TRANSCEIVER_ID 10       // Unique ID for this Unit (1-15)
+#define XBEECONFIG 0            // 1 to enter XBEE Configuration Mode
 #define DEBUG 1                 // 1 for DEBUG
+
+//---[ PIN SETTINGS ]------------------------------------------------------------------
 #define SS_TX_PIN 2             // XBee DIN
 #define SS_RX_PIN 3             // XBee DOUT
 #define US_PRESENT 1            // 1=UltraSonic Level Monitor Attached, 0=No UltraSonic
@@ -16,10 +23,8 @@
 #define US_MAX_DIST 400         // Longest Distance to Measure
 
 // Setup a Software Serial for XBEE (Allows Debug)
-#include <PeerIOSerialControl.h>
-#include <SoftwareSerial.h>
 SoftwareSerial IOSerial(SS_RX_PIN,SS_TX_PIN);
-PeerIOSerialControl XBee(10,IOSerial,Serial);    // ArduinoID, IOSerial, DebugSerial
+PeerIOSerialControl XBee(TRANSCEIVER_ID,IOSerial,Serial);    // ArduinoID, IOSerial, DebugSerial
 
 #if US_PRESENT>0
 #include <NewPing.h>
@@ -46,13 +51,19 @@ void setup(){
     pinMode(A5, INPUT);
     IOSerial.begin(9600);
     Serial.begin(9600);
+
 }
 
 //vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
 // Loop()
 //-----------------------------------------------------------------------------------------
 void loop(){
+#if XBEECONFIG>0
+  if ( IOSerial.available()>0 ) Serial.write(IOSerial.read());
+  if ( Serial.available()>0 ) IOSerial.write(Serial.read());
+#else
   XBee.Available();
+#endif
 
 #if US_PRESENT>0
   // Read UltraSonic water level

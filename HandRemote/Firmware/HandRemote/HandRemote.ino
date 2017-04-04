@@ -1,4 +1,4 @@
-/*********************************************************************************//**
+/******************************************************************************************************************//**
  * @brief  Arduino Sketch firmware to be uploaded onto the Ag-Irrigation Hand-Remote 
  * @see https://github.com/tgit23/AgIrrigationRemoteControl
  * @todo
@@ -6,51 +6,47 @@
  *  - Need a RESET option that initializes EEPROM and programs XBEE
  * @authors 
  *    tgit23        01/2017       Original
-*************************************************************************************/
+**********************************************************************************************************************/
 #include <LiquidCrystal.h>
 #include <EEPROM.h>
 #include <PeerIOSerialControl.h>        //See https://github.com/tgit23/PeerIOSerialControl
 #include <SoftwareSerial.h>
 
-#define TRANSCEIVER_ID 1                // A unique ID for this unit
-#define DEBUG 1                         // 0=OFF, 1=ON
+#define TRANSCEIVER_ID 2                // Unique ID for this Unit(1-15)
+#define XBEECONFIG 0                    // 1 to enter XBEE Configuration Mode
+#define DEBUG 0                         // 1 for DEBUG
 
-//---[ UNO PIN SETTINGS ]--------------------------------------------------------------
+//---[ PIN SETTINGS ]--------------------------------------------------------------------------------------------------
 #define SBUZZ 2                         // Signal-Pin on Buzzer ( D2 )
 #define SS_TX_PIN 11                    // TX -> XBEE-DIN ( Closest to UNO )
 #define SS_RX_PIN 12                    // RX -> XBEE-DOUT ( Farthest from UNO )
 #define BATT_PIN 1                      // Voltage divider on 9V Battery ( A1 )
 LiquidCrystal lcd(8, 9, 4, 5, 6, 7);    // select the pins used on the LCD panel
 
-//---[ PROGRAM BEHAVIOR SETTINGS ]----------------------------------------------------
+//---[ PROGRAM BEHAVIOR SETTINGS ]-------------------------------------------------------------------------------------
 #define WAIT_REPLY_MS         1000      // How long to wait for a XBee reply
 #define START_STATUS_ITERATE  15000     // Start iterating statuses after idle (ms)
 #define ITERATE_EVERY         3000      // Iterate Status every (ms)
 
-//---[ CONSTANTS ]---------------------------------------------------------------------
+//---[ ENUM CONSTANTS ]------------------------------------------------------------------------------------------------
 enum Button { UP, DOWN, RIGHT, LEFT, SELECT, NONE };
-enum eValueLocation { 
-  PROG, 
-  LOCALPIN_DIGITAL, LOCALPIN_ANALOG, 
-  REMOTEPIN_DIGITAL, REMOTEPIN_ANALOG, 
-  EPROM };
+enum eValueLocation { PROG, LOCALPIN_DIGITAL, LOCALPIN_ANALOG, REMOTEPIN_DIGITAL, REMOTEPIN_ANALOG, EPROM };
 
-//---[ SETUP VAL() INDEXES ]--------------------------------------------------------
-// Val[] Indexes
+//---[ Menu[#].Val[?] Indexes ]----------------------------------------------------------------------------------------
 #define MAIN 0                          // The current-read value of the Menu Item
 #define SET 1                           // Value used to SET a MAIN-Value
 #define LOALARM 2                       // Value used for a Low Alarm on MAIN-Value
 #define HIALARM 3                       // Value used for a High Alarm on MAIN-Value
 #define VALITEMS 4                      // Total number of Value's per Menu Item
 
-//---[ MENU STRUCTURE ]----------------------------------------------------------------
-#define MENUITEMS 5                           // # of Menu Items ( 1 + index )
-#define MAXOPTIONS 2                          // Maximum # of Options allowed
-#define PUMPIDX 0                             // Menu-idx of Select Pump Location
-#define PUMPADDR 1020                         // EEPROM address to store Selected Pump
-#define STARTIDX 1                            // First Menu item displayed after reset
+//---[ MENU STRUCTURE ]------------------------------------------------------------------------------------------------
+#define MENUITEMS 5                     // # of Menu Items ( 1 + index )
+#define MAXOPTIONS 2                    // Maximum # of Options allowed
+#define PUMPIDX 0                       // Menu-idx of Select Pump Location
+#define PUMPADDR 1020                   // EEPROM address to store Selected Pump
+#define STARTIDX 1                      // First Menu item displayed after reset
 
-//---[ SETUP DEBUG ]-------------------------------------------------------------------
+//---[ SETUP DEBUG ]---------------------------------------------------------------------------------------------------
 #if DEBUG>0
   #define DBL(x) Serial.println x
   #define DB(x) Serial.print x
@@ -61,49 +57,49 @@ enum eValueLocation {
   #define DBC  
 #endif
 
-//---[ INITIALIZE COMMUNICATIONS ]-----------------------------------------------------
+//---[ INITIALIZE COMMUNICATIONS ]-------------------------------------------------------------------------------------
 SoftwareSerial IOSerial(SS_RX_PIN,SS_TX_PIN);   // ( rxPin, txPin )
 PeerIOSerialControl XBee(TRANSCEIVER_ID,IOSerial,Serial); // ArduinoID, IOSerial, DebugSerial
 
-//---[ GLOBAL VARIABLES ]--------------------------------------------------------------
+//---[ GLOBAL VARIABLES ]----------------------------------------------------------------------------------------------
 unsigned long last_bpress = 0;                // Track last button press time
 unsigned long last_change = 0;                // Track last status iteration time
 int idx = 0;                                  // Track Menu index item
 int ValIdx = MAIN;                            // Track current menu value item
 
-/*********************************************************************************//**
+/******************************************************************************************************************//**
  * @brief  User-defined data structure for Menu Items that use a Pick-Option method
-*************************************************************************************/
-struct uItemOption {
+**********************************************************************************************************************/
+struct uMenuOption {
   char *Text;
   int Value = LOW;
-  uint8_t PumpID = 0;                         // Special place for Target AduinoID
+  uint8_t TransceiverID = 0;                  // Special place for Selected Pumps TRANSCEIVER_ID
 };
 
-/*********************************************************************************//**
+/******************************************************************************************************************//**
  * @brief  User-defined data structure for MAIN, SET, LOALARM, HIALARM Values.
-*************************************************************************************/
+**********************************************************************************************************************/
 struct uValues {
   int Value = -1;
   int ToneHz = 1000;
-  char ID = NULL;         // A set ID activates the alarm setting in the menu
-  bool Active = false;    // [MAIN]Active=Valid, [SET]Active=Settable, ALARM=Is ON
+  char ID = NULL;                             // A set ID activates the alarm setting in the menu
+  bool Active = false;                        // [MAIN]Active=Valid, [SET]Active=Settable, ALARM=Is ON
 };
 
-/*********************************************************************************//**
+/******************************************************************************************************************//**
  * @brief  User-defined data structure for every Menu Item ( Value ) on the Unit
-*************************************************************************************/
+**********************************************************************************************************************/
 struct MenuItems {
-  char *Text;
-  uValues Val[VALITEMS];
-  eValueLocation ValueLocation = PROG;      // PROG = Internally in Program
-  byte Pin = 0;                             // Arduino Pin#, Analog/Digital Set below
-  uItemOption Option[MAXOPTIONS];
-  byte LastOption = 0;                      // If entry doesn't have options its numeric
-  bool Poll=true;
+  char *Text;                                 // The text to display on the LCD for the Menu item
+  uValues Val[VALITEMS];                      // Value storage per Menu Item; MAIN, SET, LOALARM, HIALARM, 
+  eValueLocation ValueLocation = PROG;        // Where to get the MAIN-Value; LOCAL, REMOTE, EPROM, etc...
+  byte Pin = 0;                               // Arduino Pin# for ValueLocations; LOCAL, REMOTE
+  uMenuOption Option[MAXOPTIONS];             // Option settings for a Menu's MAIN-Value; like ON/OFF, PUMP1, PUMP2
+  byte LastOption = 0;                        // If entry doesn't have options its numeric
+  bool Poll=true;                             // Include the Menu Item in the Iterating Updates
 } Menu[MENUITEMS];
 
-/*********************************************************************************//**
+/******************************************************************************************************************//**
  * @brief  Record Menu Item Values in EEPROM non-volitale memory.
  * @remarks
  * - Arduino UNO offers 1024-bytes or (146)7-Byte Menu Item Storage
@@ -113,7 +109,7 @@ struct MenuItems {
  *  @code
  *    exmaple code
  *  @endcode
-*************************************************************************************/
+**********************************************************************************************************************/
 void EEPROMSet(int i = -1) {
   if ( i == -1 ) i = idx;DBL(("EEPROMSet()"));
   int iPumpOffset = Menu[PUMPIDX].Val[MAIN].Value * 245;
@@ -169,13 +165,13 @@ void EEPROMSet(int i = -1) {
   }
 }
 
-/*********************************************************************************//**
+/******************************************************************************************************************//**
  * @brief  Read Menu Item Values from Arduino EEPROM non-volitale memory.
  * @see    EEPROMSet for Addressing notation
  * @code
  *   exmaple code
  * @endcode
-*************************************************************************************/
+**********************************************************************************************************************/
 void EEPROMGet(int i = -1) {
   byte StatusByte = 0;
   if ( i == -1 ) i = idx;
@@ -212,34 +208,34 @@ void EEPROMGet(int i = -1) {
 
 }
 
-/*********************************************************************************//**
+/******************************************************************************************************************//**
  * @brief  Preforms all needed changes to the system when changing a Selected Pump.
  * @code
  *   exmaple code
  * @endcode
-*************************************************************************************/
-void SetPump(int PumpID) {
+**********************************************************************************************************************/
+void SetPump(int TransceiverID) {
   
-  if ( PumpID != XBee.TargetArduinoID() ) {
+  if ( TransceiverID != XBee.TargetArduinoID() ) {
     for (int i=0;i<MENUITEMS;i++) {
       if ( i != PUMPIDX ) {
         Menu[i].Val[MAIN].Active = false;     // De-Activate previouse Read's
         EEPROMGet(i);                         // Load Alarm Values
       }
     }
-    XBee.TargetArduinoID(PumpID);
+    XBee.TargetArduinoID(TransceiverID);
   }
   
 }
 
-/*********************************************************************************//**
+/******************************************************************************************************************//**
  * @brief  Obtain menu values and compare them against their alarm values
  * @remarks
  *  - Battery read 458 when running off USB and 856 when running from 9VDC Battery.
  * @code
  *   exmaple code
  * @endcode
-*************************************************************************************/
+**********************************************************************************************************************/
 void GetItem(int i = -1) {
   if ( i == -1 ) i = idx;DBL(("GetItem()"));
 
@@ -261,27 +257,35 @@ void GetItem(int i = -1) {
     if ( Menu[i].Val[MAIN].Value != -1 ) Menu[i].Val[MAIN].Active = true;
   }
 
-  // Check this Value for an Active Alarm
   if ( Menu[i].Val[MAIN].Active ) {
+
+    // Check the LOALARM
     if ( Menu[i].Val[LOALARM].Active && Menu[i].Val[LOALARM].ID != NULL ) {
-      if ( Menu[i].LastOption > 0 ) {
+      if ( Menu[i].LastOption > 0 ) {     // LOALARM on an option then compare equal
         if ( Menu[i].Val[MAIN].Value == Menu[i].Val[LOALARM].Value ) tone(SBUZZ,Menu[i].Val[LOALARM].ToneHz);
-      } else {
-        if ( Menu[i].Val[MAIN].Value < Menu[i].Val[LOALARM].Value ) tone(SBUZZ, Menu[i].Val[LOALARM].ToneHz);
+      } else {                            
+        if ( Menu[i].Val[MAIN].Value < Menu[i].Val[LOALARM].Value ) tone(SBUZZ,Menu[i].Val[LOALARM].ToneHz);
       }
     }
+
+    // Check the HIALARM
     if ( Menu[i].Val[HIALARM].Active && Menu[i].Val[HIALARM].ID != NULL ) {
-      if ( Menu[i].Val[MAIN].Value > Menu[i].Val[HIALARM].Value ) tone(SBUZZ, Menu[i].Val[HIALARM].ToneHz);
+      if ( Menu[i].LastOption > 0 ) {     // HIALARM on an option compare NOT equal
+        if ( Menu[i].Val[MAIN].Value != Menu[i].Val[HIALARM].Value ) tone(SBUZZ,Menu[i].Val[HIALARM].ToneHz);
+      } else {
+        if ( Menu[i].Val[MAIN].Value > Menu[i].Val[HIALARM].Value ) tone(SBUZZ,Menu[i].Val[HIALARM].ToneHz);
+      }
     }
   }
+  
 }
 
-/*********************************************************************************//**
+/******************************************************************************************************************//**
  * @brief  Preform value setting and recording when the 'Select' button is pressed.
  * @code
  *   exmaple code
  * @endcode
-*************************************************************************************/
+**********************************************************************************************************************/
 void SetItem(int i = -1) {
   if ( i == -1 ) i = idx;int iSetValue = 0;DBL(("SetItem()"));
   if ( i != PUMPIDX && !Menu[PUMPIDX].Val[MAIN].Active ) return;  // No control till a pump is selected
@@ -313,7 +317,7 @@ void SetItem(int i = -1) {
         Menu[i].Val[MAIN].Value = Menu[i].Val[SET].Value;   // Set the Value
         EEPROMSet();                                        // Write the Value to EEPROM
         Menu[i].Val[MAIN].Active = true;                    // Validate
-        if ( i == PUMPIDX ) SetPump( Menu[i].Option[ Menu[i].Val[MAIN].Value ].PumpID );
+        if ( i == PUMPIDX ) SetPump( Menu[i].Option[ Menu[i].Val[MAIN].Value ].TransceiverID );
         break;
 
       case LOCALPIN_DIGITAL:
@@ -336,26 +340,26 @@ void SetItem(int i = -1) {
   }
 }
 
-/*********************************************************************************//**
+/******************************************************************************************************************//**
  * @brief  Setup the LCD menu
  * @remarks
  * - Allows a single spot customization to users configuration
  * @code
  *   exmaple code
  * @endcode
-*************************************************************************************/
+**********************************************************************************************************************/
 void SetupMenu() {
 
   // Be sure to change 'MENUITEMS' when adding/deleting items
   Menu[PUMPIDX].Text = "Pump";
-  Menu[PUMPIDX].ValueLocation = EPROM;
+  Menu[PUMPIDX].ValueLocation = EPROM;                  // Store selected pump in EEPROM
   Menu[PUMPIDX].Option[0].Text = "Canal";
-  Menu[PUMPIDX].Option[0].PumpID = 10;           // Target ArduinoID
+  Menu[PUMPIDX].Option[0].TransceiverID = 10;           // Target TRANSCEIVER_ID
   Menu[PUMPIDX].Option[1].Text = "Ditch";
-  Menu[PUMPIDX].Option[1].PumpID = 11;           // Target ArduinoID
+  Menu[PUMPIDX].Option[1].TransceiverID = 11;           // Target TRANSCEIVER_ID
   Menu[PUMPIDX].LastOption = 1;
-  Menu[PUMPIDX].Poll=false;                     // Poll for Updates
-  Menu[PUMPIDX].Val[SET].Active = true;
+  Menu[PUMPIDX].Poll=false;                             // Don't ask pump which pump it is
+  Menu[PUMPIDX].Val[SET].Active = true;                 // Allow this value to be 'SET'
   
   Menu[1].Text = "Power";
   Menu[1].ValueLocation = REMOTEPIN_DIGITAL; 
@@ -365,8 +369,9 @@ void SetupMenu() {
   Menu[1].Option[1].Value = HIGH;
   Menu[1].LastOption = 1;
   Menu[1].Pin = 7;
-  Menu[1].Val[SET].Active = true;             // Allows Value to be 'SET'
+  Menu[1].Val[SET].Active = true;                       // Allow this Value to be 'SET'
   Menu[1].Val[LOALARM].ID = 'p';
+  Menu[1].Val[HIALARM].ID = 'P';
 
   Menu[2].Text = "Water L.";
   Menu[2].ValueLocation = REMOTEPIN_ANALOG; 
@@ -381,22 +386,22 @@ void SetupMenu() {
   
   Menu[4].Text = "Pressure";
   Menu[4].ValueLocation = REMOTEPIN_ANALOG;
-  Menu[4].Pin = 0;
+  Menu[4].Pin = 3; // Analog A3
   Menu[4].Val[LOALARM].ID='r';
   Menu[4].Val[HIALARM].ID='R';
     
   // Read all values at start-up
   GetItem(PUMPIDX);
-  SetPump( Menu[PUMPIDX].Option[ Menu[PUMPIDX].Val[MAIN].Value ].PumpID );
+  SetPump( Menu[PUMPIDX].Option[ Menu[PUMPIDX].Val[MAIN].Value ].TransceiverID );
   idx = STARTIDX;
 }
 
-/*********************************************************************************//**
+/******************************************************************************************************************//**
  * @brief  Properly display a Menu Item on the LCD screen
  * @code
  *   exmaple code
  * @endcode
-*************************************************************************************/
+**********************************************************************************************************************/
 void LCD_display() {
   
   // Top Row (Status)
@@ -427,12 +432,13 @@ void LCD_display() {
     lcd.print(" =");
     lcd.setCursor(strlen(Menu[idx].Text)+2,1);
   } else if ( ValIdx == SET ) {
-    lcd.print(" Set");
+    lcd.print(" SET");
     lcd.print((char)126); //Character '->'
     lcd.setCursor(strlen(Menu[idx].Text)+5,1);
   } else {
     if ( Menu[idx].LastOption > 0 ) {
-      lcd.print(" !=");
+      if ( ValIdx == LOALARM ) lcd.print(" !=");
+      if ( ValIdx == HIALARM ) {lcd.print(" !");lcd.print((char)183);} // Slashed equal
     } else {
       if ( ValIdx == LOALARM) lcd.print(" !<");
       if ( ValIdx == HIALARM) lcd.print(" !>");
@@ -459,14 +465,14 @@ void LCD_display() {
 }
 
 
-/*********************************************************************************//**
+/******************************************************************************************************************//**
  * @brief  Arduino Sketch Setup routine - Initialize the environment.
  * @remarks
  * - pin#10 INPUT Backlit shorting see http://forum.arduino.cc/index.php?topic=96747.0
  * @code
  *   exmaple code
  * @endcode
-*************************************************************************************/
+**********************************************************************************************************************/
 void setup(){
     pinMode(10,INPUT);            // Fix for Q1-LCD Backlit shorting issue
     pinMode(SBUZZ,OUTPUT);
@@ -481,15 +487,19 @@ void setup(){
     LCD_display();                // Display the main menu
 }
 
-/*********************************************************************************//**
+/******************************************************************************************************************//**
  * @brief  Arduino Sketch Loop() routine
  * @remarks
  * - This function is called automatically over-and-over by Arduino
  * - Handles incoming XBee communications
  * - Handles button presses and LCD response updates
  * - Handles Menu iteratation during idle.
-*************************************************************************************/
+**********************************************************************************************************************/
 void loop(){
+#if XBEECONFIG>0
+  if ( IOSerial.available()>0 ) Serial.write(IOSerial.read());
+  if ( Serial.available()>0 ) IOSerial.write(Serial.read());
+#else
 
   // Check for a button press
   Button bpress = NONE;
@@ -527,37 +537,52 @@ void loop(){
 
       if (bpress == SELECT) {
         SetItem();
-      
-      } else if (bpress == UP) {
-        ValIdx = MAIN;
-        idx--;if(idx<0) idx=MENUITEMS-1;
-        if ( !Menu[idx].Val[MAIN].Active ) GetItem();
+        ValIdx = MAIN;              // Return to the MAIN items once a SET is done
+
+      } else if (bpress == UP ) {
+        if ( ValIdx == MAIN ) {
+          // Change Menu Item
+          idx--;if(idx<0) idx=MENUITEMS-1;
+          if ( !Menu[idx].Val[MAIN].Active ) GetItem();
+        } else {
+          // Change Value
+          Menu[idx].Val[ValIdx].Value++;
+          if ( Menu[idx].LastOption>0 && Menu[idx].Val[ValIdx].Value > Menu[idx].LastOption) Menu[idx].Val[ValIdx].Value = 0;
+        }
         
       } else if (bpress == DOWN) {
+        if ( ValIdx == MAIN ) { 
+          // Change Menu Item
+          idx++;if(idx>MENUITEMS-1) idx=0;
+          if ( ValIdx == MAIN && !Menu[idx].Val[MAIN].Active ) GetItem();
+        } else {
+          // Change Value
+          Menu[idx].Val[ValIdx].Value--;
+          if ( Menu[idx].LastOption>0 && Menu[idx].Val[ValIdx].Value < 0) Menu[idx].Val[ValIdx].Value = Menu[idx].LastOption;
+        }
+
+      } else if (bpress == RIGHT) {
         ValIdx++;
-        if ( ValIdx == SET && !Menu[idx].Val[SET].Active ) ValIdx++;      // Skip SET if not Active
-        if ( ValIdx == LOALARM && Menu[idx].Val[LOALARM].ID == NULL ) ValIdx++;
-        if ( ValIdx == HIALARM && Menu[idx].Val[HIALARM].ID == NULL ) ValIdx++;    // Skip HIALARM if Option
+        if ( ValIdx == SET && !Menu[idx].Val[SET].Active ) ValIdx++;                // Skip SET if not Active
+        if ( ValIdx == LOALARM && Menu[idx].Val[LOALARM].ID == NULL ) ValIdx++;     // Skip LOALARM if not Identified
+        if ( ValIdx == HIALARM && Menu[idx].Val[HIALARM].ID == NULL ) ValIdx++;     // Skip HIALARM if not Identified
         if ( ValIdx > VALITEMS-1 ) {
           ValIdx = 0;
           idx++;if(idx>MENUITEMS-1) idx=0;
         }
         if ( ValIdx == MAIN && !Menu[idx].Val[MAIN].Active ) GetItem();
-      }    
-
-      // Change the Value
-      if ( ValIdx != MAIN ) {
-        if (bpress == RIGHT) {
-          Menu[idx].Val[ValIdx].Value++;
-          if ( Menu[idx].LastOption>0 && Menu[idx].Val[ValIdx].Value > Menu[idx].LastOption) Menu[idx].Val[ValIdx].Value = 0;
-        
-        } else if(bpress == LEFT) {
-          if ( Menu[idx].Val[ValIdx].Value > 0 ) Menu[idx].Val[ValIdx].Value--;
-          if ( Menu[idx].LastOption>0 && Menu[idx].Val[ValIdx].Value > Menu[idx].LastOption) Menu[idx].Val[ValIdx].Value = Menu[idx].LastOption;
-        }
+      
+      } else if (bpress == LEFT) {
+        ValIdx--;if (ValIdx<0) ValIdx=0;
+        if ( ValIdx == SET && !Menu[idx].Val[SET].Active ) ValIdx--;                // Skip SET if not Active
+        if ( ValIdx == LOALARM && Menu[idx].Val[LOALARM].ID == NULL ) ValIdx--;     // Skip LOALARM if not identified
+        if ( ValIdx == HIALARM && Menu[idx].Val[HIALARM].ID == NULL ) ValIdx--;     // Skip HIALARM if not identified
+        if ( ValIdx < 0 ) ValIdx = 0;
+        if ( ValIdx == MAIN && !Menu[idx].Val[MAIN].Active ) GetItem();
       }
 
     // Update Display
     LCD_display();
   }
+#endif
 }
