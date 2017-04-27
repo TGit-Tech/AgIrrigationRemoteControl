@@ -12,13 +12,15 @@
 
 #define TRANSCEIVER_ID 10       // Unique ID for this Unit (1-15)
 #define XBEECONFIG 0            // 1 to enter XBEE Configuration Mode
-#define DEBUG 1                 // 1 for DEBUG
+#define DEBUG 0                 // 1 for DEBUG
 
 //---[ PIN SETTINGS ]------------------------------------------------------------------
 #define SS_TX_PIN 2             // XBee DIN
 #define SS_RX_PIN 3             // XBee DOUT
+#define PUMP_POWER_PIN 7        // Pump Power Pin ( Blue twisted pair )
+#define PUMP_AUX_CONTACT 6      // Pump Power Aux Contact ( Green twisted pair )
 #define US_PRESENT 1            // 1=UltraSonic Level Monitor Attached, 0=No UltraSonic
-#define US_TRIG_PIN 6			      // UltraSonic Trigger Pin
+#define US_TRIG_PIN 4			      // UltraSonic Trigger Pin
 #define US_ECHO_PIN	5			      // UltraSonic Echo Pin
 #define US_MAX_DIST 400         // Longest Distance to Measure
 
@@ -39,10 +41,10 @@ unsigned long ulLastPing = 0;
 void setup(){
     pinMode(SS_RX_PIN, INPUT);
     pinMode(SS_TX_PIN, OUTPUT);
-    pinMode(4, OUTPUT);
-    pinMode(5, INPUT);
-    pinMode(6, OUTPUT);
-    pinMode(7, OUTPUT);
+    pinMode(US_TRIG_PIN, OUTPUT);
+    pinMode(US_ECHO_PIN, INPUT);
+    pinMode(PUMP_POWER_PIN, OUTPUT);
+    pinMode(PUMP_AUX_CONTACT, INPUT_PULLUP);
 	  pinMode(A0, INPUT);
     pinMode(A1, INPUT);
     pinMode(A2, INPUT);
