@@ -13,7 +13,7 @@
 #include <SoftwareSerial.h>
 
 //---[ COMMONLY CHANGED SETTINGS ]-------------------------------------------------------------------------------------
-#define TRANSCEIVER_ID 2                // Unique numeric (ID)entity for this Unit(1-15)
+#define TRANSCEIVER_ID 1                // Unique numeric (ID)entity for this Unit(1-15)
 #define XBEECONFIG 0                    // Configure the XBEE using XCTU Digi Software by setting this to 1
 #define DEBUG 0                         // Set this to 1 for Serial DEBUGGING messages ( Firmware development use only )
 
@@ -576,23 +576,28 @@ void loop(){
     //------- (   UP   ) -------
     } else if (bpress == UP ) {
       if ( SubIdx == MAIN ) {                                                   // If viewing 'MAIN' Menu items
-        idx--;                                                                  // Change Menu Item to previous
-        if ( Menu[idx].Location & PUMP_PIN && !bitRead(Menu[idx].Location, Menu[PUMPIDX].Sub[MAIN].Value + 8)) idx--;// If Pump but not this Pump; Skip
-        if(idx<0) idx=NUM_MENU_ITEMS-1;                                              // Preform boundary check
+        idx--; if( idx<0 ) idx = NUM_MENU_ITEMS-1;                              // Change Menu Item to previous
+        if ( Menu[idx].Location & PUMP_PIN && 
+             !bitRead(Menu[idx].Location, Menu[PUMPIDX].Sub[MAIN].Value + 8)) { // If Pump but not this Pump
+              idx--; }                                                          //    Skip this item
+        if( idx<0 ) idx = NUM_MENU_ITEMS-1;                                     // Preform boundary check
         if ( Menu[idx].Sub[MAIN].State != VALID ) GetItem();                    // Retreive Value
 
       } else {                                                                  // ELSE
         Menu[idx].Sub[SubIdx].Value++;                                          // Change Value up
-        if ( Menu[idx].LastOptionIdx>0 && Menu[idx].Sub[SubIdx].Value > Menu[idx].LastOptionIdx)
-          Menu[idx].Sub[SubIdx].Value = 0;                                      // Option - Boundary Check
+        if ( Menu[idx].LastOptionIdx>0 && 
+             Menu[idx].Sub[SubIdx].Value > Menu[idx].LastOptionIdx) {
+          Menu[idx].Sub[SubIdx].Value = 0; }                                    // Option - Boundary Check
       }
 
     //------- (  DOWN  ) -------
     } else if (bpress == DOWN) {
       if ( SubIdx == MAIN ) {                                                   // If viewing 'MAIN' menu items 
-        idx++;                                                                  // Change Menu Item idx to NEXT item...
-        if ( Menu[idx].Location & PUMP_PIN && !bitRead(Menu[idx].Location, Menu[PUMPIDX].Sub[MAIN].Value + 8)) idx++;// If Pump but not this Pump Skip
-        if(idx>NUM_MENU_ITEMS-1) idx=0;                                              // Preform boundary check                                        
+        idx++; if ( idx>NUM_MENU_ITEMS-1 ) idx=0;                               // Change Menu Item idx to NEXT item...
+        if ( Menu[idx].Location & PUMP_PIN && 
+             !bitRead(Menu[idx].Location, Menu[PUMPIDX].Sub[MAIN].Value + 8)) { // If Pump but not this Pump Skip
+              idx++; }                                                          
+        if ( idx>NUM_MENU_ITEMS-1 ) idx=0;                                      // Preform boundary check                                        
         if ( SubIdx == MAIN && Menu[idx].Sub[MAIN].State != VALID ) GetItem();
       } else {                                                                  // ELSE
         Menu[idx].Sub[SubIdx].Value--;                                          // Change Value down
@@ -606,10 +611,7 @@ void loop(){
       if ( SubIdx == SET && Menu[idx].Sub[SET].State != SETTABLE ) SubIdx++;    // Skip SET if not SETTABLE
       if ( SubIdx == LOALARM && Menu[idx].Sub[LOALARM].ID == NULL ) SubIdx++;   // Skip LOALARM if not Identified
       if ( SubIdx == HIALARM && Menu[idx].Sub[HIALARM].ID == NULL ) SubIdx++;   // Skip HIALARM if not Identified
-      if ( SubIdx > 3 ) {
-        SubIdx = 0;
-        idx++;if(idx>NUM_MENU_ITEMS-1) idx=0;
-      }
+      if ( SubIdx > HIALARM ) SubIdx = MAIN;
       if ( SubIdx == MAIN && Menu[idx].Sub[MAIN].State != VALID ) GetItem();
     
     //------- (  LEFT  ) -------  
@@ -618,7 +620,7 @@ void loop(){
       if ( SubIdx == SET && Menu[idx].Sub[SET].State != SETTABLE ) SubIdx--;    // Skip SET if not SETTABLE
       if ( SubIdx == LOALARM && Menu[idx].Sub[LOALARM].ID == NULL ) SubIdx--;   // Skip LOALARM if not identified
       if ( SubIdx == HIALARM && Menu[idx].Sub[HIALARM].ID == NULL ) SubIdx--;   // Skip HIALARM if not identified
-      if ( SubIdx < 0 ) SubIdx = 0;
+      if ( SubIdx < MAIN ) SubIdx = MAIN;
       if ( SubIdx == MAIN && Menu[idx].Sub[MAIN].State != VALID ) GetItem();
     }
 
