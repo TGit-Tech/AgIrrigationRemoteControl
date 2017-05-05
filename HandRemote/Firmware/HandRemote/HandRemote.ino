@@ -4,6 +4,7 @@
  * @remarks Version 2017.04.26
  * @todo
  *  - Implement Firmata for Base/Desktop operation
+ *  - Make so default on Set is Opposite of last reading
  * @authors 
  *    tgit23        01/2017       Original
 **********************************************************************************************************************/
@@ -471,7 +472,7 @@ void LCD_display() {
         //---------------------- RAW VALUE DISPLAY MODIFICATIONS -----------------------------
         // Menu[4 and 5] are Pressure Transducers we change to PSI ( Pounds per square inch )
         if ( idx == 5 || idx == 6 ) {
-          lcd.print( (int) (Menu[idx].Sub[SubIdx].Value - 97) * 175 / 819 );
+          lcd.print( (int) ((Menu[idx].Sub[SubIdx].Value - 97) * 0.2137) );
         } else {
           lcd.print(Menu[idx].Sub[SubIdx].Value);
         }
@@ -612,7 +613,11 @@ void loop(){
       if ( SubIdx == LOALARM && Menu[idx].Sub[LOALARM].ID == NULL ) SubIdx++;   // Skip LOALARM if not Identified
       if ( SubIdx == HIALARM && Menu[idx].Sub[HIALARM].ID == NULL ) SubIdx++;   // Skip HIALARM if not Identified
       if ( SubIdx > HIALARM ) SubIdx = MAIN;
-      if ( SubIdx == MAIN && Menu[idx].Sub[MAIN].State != VALID ) GetItem();
+      if ( Menu[idx].Sub[MAIN].State == VALID ) {
+        if ( SubIdx == SET && Menu[idx].Sub[SET].Value < 0 ) Menu[idx].Sub[SET].Value = Menu[idx].Sub[MAIN].Value; // Make SET value MAIN value instead of ERR
+      } else {
+        GetItem();
+      }
     
     //------- (  LEFT  ) -------  
     } else if (bpress == LEFT) {
