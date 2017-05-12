@@ -14,7 +14,7 @@
 #include <SoftwareSerial.h>
 
 //---[ COMMONLY CHANGED SETTINGS ]-------------------------------------------------------------------------------------
-#define TRANSCEIVER_ID 1                // Unique numeric (ID)entity for this Unit(1-15)
+#define TRANSCEIVER_ID 2                // Unique numeric (ID)entity for this Unit(1-15)
 #define XBEECONFIG 0                    // Configure the XBEE using XCTU Digi Software by setting this to 1
 #define DEBUG 0                         // Set this to 1 for Serial DEBUGGING messages ( Firmware development use only )
 
