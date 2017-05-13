@@ -80,7 +80,7 @@ bool AlarmActive = false;                   // Track if an Active Alarm is prese
 //=====================================================================================================================
 //---[ MENU-ITEMS USED IN THE FIRMWARE ]--
 #define MONITOR 0                         // Menu[MONITOR] tells the firmware to monitor only selected or all pumps
-#define PUMPIDX 1                         // Menu[PUMPIDX] the Menu-index of Selected Pump-Controller
+#define PUMPIDX 2                         // Menu[PUMPIDX] the Menu-index of Selected Pump-Controller
 
 #define NUM_MENU_ITEMS 7                  //<<<<<<<<<<<<<<< MUST MATCH NUMBER OF MENU ITEMS DEFINED !!!!!!!!!!!!!!!!!!
 #define MAXOPTIONS 2                      //<<<<<<<<<<<<<<< MUST ALLOW MAXIMUM NO of OPTIONS USED !!!!!!!!!!!!!!!!!!!!
@@ -127,6 +127,11 @@ void SetupMenu() {
   Menu[MONITOR].Option[1].Text = "All";                 // Monitor "All" Pumps            - Option #1 = All
   Menu[MONITOR].Option[1].Value = 1;                    // "All" will be the value 1      - All = 1
   Menu[MONITOR].LastOptionIdx = 1;                      // Last Option Index defined      - Number of Options - 1
+
+  //-----------------------------------------
+  Menu[1].Text = "Battery(B)";                    // Create a menu item for monitoring the Battery
+  Menu[1].Location = HAND_PIN+ A+1;               // Battery level is gotten from the Hand-Remote pin A1
+  Menu[1].Sub[LOALARM].ID = 'b';                  // A Low Alarm is identified by a lower-case 'b'
   
   //-------------------------------------------------------------------------------------------------------------------
   Menu[PUMPIDX].Text = "Pump";                          // Menu Item used to select the Pump-Controller
@@ -140,11 +145,6 @@ void SetupMenu() {
   Menu[PUMPIDX].Option[1].Text = "Ditch";               // Pump can be "Ditch"            - Option #1 = Ditch
   Menu[PUMPIDX].Option[1].Value = 11;                   // "Ditch" Value=TRANSCEIVER_ID   - Ditch = TrasceiverID #11
   Menu[PUMPIDX].LastOptionIdx = 1;                      // Last Pump Option Index         - # of Pump-Controllers - 1
-
-  //-----------------------------------------
-  Menu[2].Text = "Battery(B)";                    // Create a menu item for monitoring the Battery
-  Menu[2].Location = HAND_PIN+ A+1;               // Battery level is gotten from the Hand-Remote pin A1
-  Menu[2].Sub[LOALARM].ID = 'b';                  // A Low Alarm is identified by a lower-case 'b'
   
   //vvvvvv[ PUMP-SPECIFIC MENU ITEMS ]vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
   //-----------------------------------------
