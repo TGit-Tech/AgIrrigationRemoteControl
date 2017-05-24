@@ -4,7 +4,6 @@
  * @remarks Version 2017.04.26
  * @todo
  *  - Implement Firmata for Base/Desktop operation
- *  - Make so default on Set is Opposite of last reading
  * @authors 
  *    tgit23        01/2017       Original
 **********************************************************************************************************************/
@@ -72,7 +71,9 @@ unsigned long last_bpress = 0;              // Track last button press time
 unsigned long last_change = 0;              // Track last status iteration time
 int idx = 0;                                // Track Menu index item
 int SubIdx = 0;                             // Track current menu value item
+int ButtonHeld = 0;                         // Increment values by 10 when button is held
 bool AlarmActive = false;                   // Track if an Active Alarm is present
+bool bIterating = false;                    // Alarm only active while iterating the menu
 //^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 //=====================================================================================================================
@@ -80,6 +81,7 @@ bool AlarmActive = false;                   // Track if an Active Alarm is prese
 //=====================================================================================================================
 //---[ MENU-ITEMS USED IN THE FIRMWARE ]--
 #define MONITOR 0                         // Menu[MONITOR] tells the firmware to monitor only selected or all pumps
+#define BATT 1                            // Menu[BATT] monitors the battery voltage level
 #define PUMPIDX 2                         // Menu[PUMPIDX] the Menu-index of Selected Pump-Controller
 
 #define NUM_MENU_ITEMS 7                  //<<<<<<<<<<<<<<< MUST MATCH NUMBER OF MENU ITEMS DEFINED !!!!!!!!!!!!!!!!!!
@@ -129,9 +131,9 @@ void SetupMenu() {
   Menu[MONITOR].LastOptionIdx = 1;                      // Last Option Index defined      - Number of Options - 1
 
   //-----------------------------------------
-  Menu[1].Text = "Battery(B)";                    // Create a menu item for monitoring the Battery
-  Menu[1].Location = HAND_PIN+ A+1;               // Battery level is gotten from the Hand-Remote pin A1
-  Menu[1].Sub[LOALARM].ID = 'b';                  // A Low Alarm is identified by a lower-case 'b'
+  Menu[BATT].Text = "Battery(B)";                       // Create a menu item for monitoring the Battery
+  Menu[BATT].Location = HAND_PIN+ A+1;                  // Battery level is gotten from the Hand-Remote pin A1
+  Menu[BATT].Sub[LOALARM].ID = 'b';                     // A Low Alarm is identified by a lower-case 'b'
   
   //-------------------------------------------------------------------------------------------------------------------
   Menu[PUMPIDX].Text = "Pump";                          // Menu Item used to select the Pump-Controller
@@ -333,23 +335,26 @@ void GetItem(int i = -1) {
     if ( i == PUMPIDX && Menu[i].Sub[MAIN].State == VALID ) {                     // New Pump Selection
       SetPump( Menu[i].Option[ Menu[i].Sub[MAIN].Value ].Value );                 // SetPump(TRANSCEIER_ID)
     }            
-        
-    if ( Menu[i].Sub[LOALARM].State == ON && Menu[i].Sub[LOALARM].ID != NULL ) {  // Check the LOALARM
-      if ( Menu[i].LastOptionIdx > 0 ) {                                             
-        AlarmActive = ( Menu[i].Sub[MAIN].Value == Menu[i].Sub[LOALARM].Value );  // Option Compare EQUALS
-      } else {                                                                    
-        AlarmActive = ( Menu[i].Sub[MAIN].Value < Menu[i].Sub[LOALARM].Value );   // Value Compare LESS-THAN
+
+    if ( bIterating ) {
+      if ( Menu[i].Sub[LOALARM].State == ON && Menu[i].Sub[LOALARM].ID != NULL ) {  // Check the LOALARM
+        if ( Menu[i].LastOptionIdx > 0 ) {                                             
+          AlarmActive = ( Menu[i].Sub[MAIN].Value == Menu[i].Sub[LOALARM].Value );  // Option Compare EQUALS
+        } else {                                                                    
+          AlarmActive = ( Menu[i].Sub[MAIN].Value < Menu[i].Sub[LOALARM].Value );   // Value Compare LESS-THAN
+        }
+        if ( i == BATT && Menu[i].Sub[MAIN].Value < 550 ) AlarmActive = false;      // Disable BATT for USB Plug-In
       }
-    }
     
-    if ( Menu[i].Sub[HIALARM].State == ON && Menu[i].Sub[HIALARM].ID != NULL ) {  // Check the HIALARM
-      if ( Menu[i].LastOptionIdx > 0 ) {
-        AlarmActive = ( Menu[i].Sub[MAIN].Value != Menu[i].Sub[HIALARM].Value );  // Option Compare NOT-EQUAL
-      } else {
-        AlarmActive = ( Menu[i].Sub[MAIN].Value > Menu[i].Sub[HIALARM].Value );   // Value Compare GREATER-THAN
+      if ( Menu[i].Sub[HIALARM].State == ON && Menu[i].Sub[HIALARM].ID != NULL ) {  // Check the HIALARM
+        if ( Menu[i].LastOptionIdx > 0 ) {
+          AlarmActive = ( Menu[i].Sub[MAIN].Value != Menu[i].Sub[HIALARM].Value );  // Option Compare NOT-EQUAL
+        } else {
+          AlarmActive = ( Menu[i].Sub[MAIN].Value > Menu[i].Sub[HIALARM].Value );   // Value Compare GREATER-THAN
+        }
       }
+      if ( AlarmActive ) tone(SBUZZ,Menu[i].Sub[LOALARM].ToneHz);                   // Sound Buzzer
     }
-    if ( AlarmActive ) tone(SBUZZ,Menu[i].Sub[LOALARM].ToneHz);                   // Sound Buzzer
   } 
 }
 
@@ -535,9 +540,9 @@ void loop(){
 
   //--- Iterate Menu while Idle --------------------------------
   if(bpress == NONE) {
-    if ( millis() - last_bpress > START_STATUS_ITERATE && 
-         millis() - last_change > ITERATE_EVERY && !AlarmActive ) {
-          
+    ButtonHeld = 0;
+    if ( millis() - last_bpress > START_STATUS_ITERATE) bIterating = true;
+    if ( bIterating && millis() - last_change > ITERATE_EVERY && !AlarmActive ) {
           SubIdx = MAIN;                                        // Switch to 'MAIN' menu items
           int i = idx;                                          // Mark current idx
           
@@ -563,11 +568,14 @@ void loop(){
           last_change=millis();         // Record time for next iteration
           LCD_display();                // Update the display
     }
-  } else { last_bpress = millis(); }    // Record time for Start Iteration (Idle time)
+  
+  } else {   
   
   //--- Process Button Press -----------------------------------
-  if(bpress !=NONE) {
-    noTone(SBUZZ);AlarmActive = false;  // Turn off any alarms at button press
+    last_bpress = millis(); }           // Record time for next Start of Iteration (Idle time)
+    noTone(SBUZZ);                      // Shut off any sound for alarms
+    AlarmActive = false;                // Turn off any alarms at button press
+    bIterating = false;                 // Stop Iterating Menu Items
     
     //------- ( SELECT ) -------
     if (bpress == SELECT) {
@@ -585,10 +593,15 @@ void loop(){
         if ( Menu[idx].Sub[MAIN].State != VALID ) GetItem();                    // Retreive Value
 
       } else {                                                                  // ELSE
-        Menu[idx].Sub[SubIdx].Value++;                                          // Change Value up
-        if ( Menu[idx].LastOptionIdx>0 && 
-             Menu[idx].Sub[SubIdx].Value > Menu[idx].LastOptionIdx) {
-          Menu[idx].Sub[SubIdx].Value = 0; }                                    // Option - Boundary Check
+        if ( Menu[idx].LastOptionIdx>0 ) {
+          Menu[idx].Sub[SubIdx].Value++;                                          // Move to next option
+          if ( Menu[idx].Sub[SubIdx].Value > Menu[idx].LastOptionIdx ) {
+            Menu[idx].Sub[SubIdx].Value = 0; }                                    // Option - Boundary Check
+        } else if ( ButtonHeld < 5 ) {
+          Menu[idx].Sub[SubIdx].Value++;                                          // Change Value up 1
+        } else {
+          Menu[idx].Sub[SubIdx].Value = Menu[idx].Sub[SubIdx].Value + 10;         // Change Value up 10
+        }
       }
 
     //------- (  DOWN  ) -------
@@ -600,10 +613,18 @@ void loop(){
               idx++; }                                                          
         if ( idx>NUM_MENU_ITEMS-1 ) idx=0;                                      // Preform boundary check                                        
         if ( SubIdx == MAIN && Menu[idx].Sub[MAIN].State != VALID ) GetItem();
+      
       } else {                                                                  // ELSE
-        Menu[idx].Sub[SubIdx].Value--;                                          // Change Value down
-        if ( Menu[idx].LastOptionIdx>0 && Menu[idx].Sub[SubIdx].Value < 0)         
-          Menu[idx].Sub[SubIdx].Value = Menu[idx].LastOptionIdx;                   // Boundary Check
+        if ( Menu[idx].LastOptionIdx>0 ) {
+          Menu[idx].Sub[SubIdx].Value--;                                        // Move Option down one
+          if ( Menu[idx].Sub[SubIdx].Value < 0) {
+            Menu[idx].Sub[SubIdx].Value = Menu[idx].LastOptionIdx; }            // Option - Boundary Check
+        } else if ( ButtonHeld < 5 ) {
+          Menu[idx].Sub[SubIdx].Value--;                                        // Change Value down 1
+        } else {
+          Menu[idx].Sub[SubIdx].Value = Menu[idx].Sub[SubIdx].Value - 10;       // Change Value down 10
+        }
+        if ( Menu[idx].Sub[SubIdx].Value < 0 ) Menu[idx].Sub[SubIdx].Value = 0; // Stop change at 0
       }
     
     //------- (  RIGHT ) -------
@@ -631,6 +652,7 @@ void loop(){
 
     // Update Display
     LCD_display();
+    ButtonHeld++;
   }
 #endif
 }
