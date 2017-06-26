@@ -3,7 +3,7 @@ Control an Ag Industrial 3-Phase Irrigation Pump with Arduino UNO and XBee RF
 
 ![Hand Remote](/pics/Hand_PumpControl_Units.png)
 # Overview
-- A solid urban 2-Mile range; possibly more depending on location and setup
+- A solid rural 2-Mile range; possibly more depending on location and setup
 - One Hand-Remote can control multiple pumps
 - Multiple Hand-Remotes can control one pump
 - Simple addition of a digital pressure gauge for water pressure monitoring
