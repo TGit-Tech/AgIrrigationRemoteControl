@@ -1,36 +1,36 @@
-/*********************************************************************************//**
- *  @brief  Arduino Sketch to be loaded onto the Irrigation Pump Controller.
- *    see:
+/******************************************************************************************************************//**
+ *  @brief  Arduino Sketch to be loaded onto the AgIrrigationRemoteControl Pump Controller device.
+ *    see:  https://github.com/tgit23/AgIrrigationRemoteControl
  *  @code
  *    exmaple code
  *  @endcode
  *  @authors 
  *    tgit23        12/2016       Original
-*************************************************************************************/
-#include <PeerIOSerialControl.h> //See https://github.com/tgit23/PeerIOSerialControl
+**********************************************************************************************************************/
+#include <PeerIOSerialControl.h>        //See https://github.com/tgit23/PeerIOSerialControl
 #include <SoftwareSerial.h>
 
-#define TRANSCEIVER_ID 10       // Unique ID for this Unit (1-15)
-#define XBEECONFIG 0            // 1 to enter XBEE Configuration Mode
-#define DEBUG 0                 // 1 for DEBUG
+#define TRANSCEIVER_ID 10               // Unique Transceiver ID for this Device (1-15)
+#define XBEECONFIG 0                    // 1 to enter XBEE Configuration Mode, 0 Normal Operation
+#define DEBUG 0                         // 1 for DEBUG
 
-//---[ PIN SETTINGS ]------------------------------------------------------------------
-#define SS_TX_PIN 2             // XBee DIN
-#define SS_RX_PIN 3             // XBee DOUT
-#define PUMP_POWER_PIN 7        // Pump Power Pin ( Blue twisted pair )
-#define PUMP_AUX_CONTACT 6      // Pump Power Aux Contact ( Green twisted pair )
-#define US_PRESENT 1            // 1=UltraSonic Level Monitor Attached, 0=No UltraSonic
-#define US_TRIG_PIN 4			      // UltraSonic Trigger Pin
-#define US_ECHO_PIN	5			      // UltraSonic Echo Pin
-#define US_MAX_DIST 400         // Longest Distance to Measure
+//---[ PIN SETTINGS ]--------------------------------------------------------------------------------------------------
+#define SS_TX_PIN 2                     // XBee DIN
+#define SS_RX_PIN 3                     // XBee DOUT
+#define PUMP_POWER_PIN 7                // Pump Power Pin ( Blue twisted pair )
+#define PUMP_AUX_CONTACT 0              // Pump Power Aux Contact ( Green twisted pair ) 0-to deactivate
+#define ULTRASONIC_PRESENT 0            // 1=UltraSonic Level Monitor Attached, 0=No UltraSonic
+#define ULTRASONIC_TRIG_PIN 4           // UltraSonic Trigger Pin
+#define ULTRASONIC_ECHO_PIN 5           // UltraSonic Echo Pin
+#define ULTRASONIC_MAX_DIST 400         // Longest Distance to Measure
 
 // Setup a Software Serial for XBEE (Allows Debug)
 SoftwareSerial IOSerial(SS_RX_PIN,SS_TX_PIN);
 PeerIOSerialControl XBee(TRANSCEIVER_ID,IOSerial,Serial);    // ArduinoID, IOSerial, DebugSerial
 
-#if US_PRESENT>0
+#if ULTRASONIC_PRESENT>0
 #include <NewPing.h>
-NewPing sonar(US_TRIG_PIN, US_ECHO_PIN, US_MAX_DIST);
+NewPing sonar(US_TRIG_PIN, ULTRASONIC_ECHO_PIN, ULTRASONIC_MAX_DIST);
 unsigned long ulLastPing = 0;
 #endif
 
@@ -41,11 +41,18 @@ unsigned long ulLastPing = 0;
 void setup(){
     pinMode(SS_RX_PIN, INPUT);
     pinMode(SS_TX_PIN, OUTPUT);
+    pinMode(4,OUTPUT);
+    pinMode(5,OUTPUT);
+    pinMode(6,OUTPUT);
+    pinMode(7,OUTPUT);
+#if ULTRASONIC_PRESENT>0
     pinMode(US_TRIG_PIN, OUTPUT);
     pinMode(US_ECHO_PIN, INPUT);
-    pinMode(PUMP_POWER_PIN, OUTPUT);
+#endif
+#if PUMP_AUX_CONTACT>0
     pinMode(PUMP_AUX_CONTACT, INPUT_PULLUP);
-	  pinMode(A0, INPUT);
+#endif
+    pinMode(A0, INPUT);
     pinMode(A1, INPUT);
     pinMode(A2, INPUT);
     pinMode(A3, INPUT);
@@ -67,7 +74,7 @@ void loop(){
   XBee.Available();
 #endif
 
-#if US_PRESENT>0
+#if ULTRASONIC_PRESENT>0
   // Read UltraSonic water level
   int ulCurrentTime = millis();
   if ( ulCurrentTime > ulLastPing + 1000 ) {

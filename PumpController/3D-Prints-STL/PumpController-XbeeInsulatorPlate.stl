@@ -1,0 +1,366 @@
+solid PumpController-XbeeInsulatorPlate
+facet normal 0.0 0.0 -1.0
+  outer loop
+    vertex 8.557779489814408 35.0 0.0
+    vertex 2.5000000000000027 30.0 0.0
+    vertex 2.2577794898144066 30.8 0.0
+  endloop
+endfacet
+facet normal 0.0 0.0 -1.0
+  outer loop
+    vertex 2.5000000000000027 30.0 0.0
+    vertex 8.557779489814408 35.0 0.0
+    vertex 10.0 35.0 0.0
+  endloop
+endfacet
+facet normal 0.0 0.0 -1.0
+  outer loop
+    vertex 2.5000000000000027 30.0 0.0
+    vertex 0.0 0.0 0.0
+    vertex 0.0 30.0 0.0
+  endloop
+endfacet
+facet normal 0.0 0.0 -1.0
+  outer loop
+    vertex 0.0 0.0 0.0
+    vertex 2.5000000000000027 30.0 0.0
+    vertex 30.0 0.0 0.0
+  endloop
+endfacet
+facet normal 0.0 0.0 -1.0
+  outer loop
+    vertex 30.0 0.0 0.0
+    vertex 2.5000000000000027 30.0 0.0
+    vertex 10.0 35.0 0.0
+  endloop
+endfacet
+facet normal 0.0 0.0 -1.0
+  outer loop
+    vertex 30.0 0.0 0.0
+    vertex 10.0 35.0 0.0
+    vertex 20.0 35.0 0.0
+  endloop
+endfacet
+facet normal 0.0 0.0 -1.0
+  outer loop
+    vertex 30.0 0.0 0.0
+    vertex 20.0 35.0 0.0
+    vertex 27.5 30.0 0.0
+  endloop
+endfacet
+facet normal 0.0 0.0 -1.0
+  outer loop
+    vertex 30.0 0.0 0.0
+    vertex 27.5 30.0 0.0
+    vertex 30.0 30.0 0.0
+  endloop
+endfacet
+facet normal -0.0 -0.0 1.0
+  outer loop
+    vertex 2.5000000000000027 30.0 5.0
+    vertex 8.557779489814408 35.0 5.0
+    vertex 2.2577794898144066 30.8 5.0
+  endloop
+endfacet
+facet normal -0.0 -0.0 1.0
+  outer loop
+    vertex 8.557779489814408 35.0 5.0
+    vertex 2.5000000000000027 30.0 5.0
+    vertex 10.0 35.0 5.0
+  endloop
+endfacet
+facet normal -0.5547001962252294 0.8320502943378437 0.0
+  outer loop
+    vertex 2.2577794898144066 30.8 5.0
+    vertex 8.557779489814408 35.0 0.0
+    vertex 2.2577794898144066 30.8 0.0
+  endloop
+endfacet
+facet normal -0.5547001962252294 0.8320502943378437 0.0
+  outer loop
+    vertex 8.557779489814408 35.0 0.0
+    vertex 2.2577794898144066 30.8 5.0
+    vertex 8.557779489814408 35.0 5.0
+  endloop
+endfacet
+facet normal -0.0 1.0 -0.0
+  outer loop
+    vertex 8.557779489814408 35.0 5.0
+    vertex 10.0 35.0 0.0
+    vertex 8.557779489814408 35.0 0.0
+  endloop
+endfacet
+facet normal -0.0 1.0 -0.0
+  outer loop
+    vertex 10.0 35.0 0.0
+    vertex 8.557779489814408 35.0 5.0
+    vertex 10.0 35.0 0.8000000000000002
+  endloop
+endfacet
+facet normal -0.0 1.0 -0.0
+  outer loop
+    vertex 10.0 35.0 0.8000000000000002
+    vertex 8.557779489814408 35.0 5.0
+    vertex 10.0 35.0 5.0
+  endloop
+endfacet
+facet normal 0.5547001962252294 -0.8320502943378435 -1.0757962345916565e-17
+  outer loop
+    vertex 10.0 35.0 5.0
+    vertex 2.5000000000000027 30.0 0.8000000000000002
+    vertex 10.0 35.0 0.8000000000000002
+  endloop
+endfacet
+facet normal 0.5547001962252294 -0.8320502943378435 -1.0757962345916565e-17
+  outer loop
+    vertex 2.5000000000000027 30.0 0.8000000000000002
+    vertex 10.0 35.0 5.0
+    vertex 2.5000000000000027 30.0 5.0
+  endloop
+endfacet
+facet normal -0.9570920264890527 -0.28978414868843105 2.039647263303828e-18
+  outer loop
+    vertex 2.2577794898144066 30.8 5.0
+    vertex 2.5000000000000027 30.0 0.8000000000000002
+    vertex 2.5000000000000027 30.0 5.0
+  endloop
+endfacet
+facet normal -0.9570920264890527 -0.28978414868843105 2.039647263303828e-18
+  outer loop
+    vertex 2.5000000000000027 30.0 0.8000000000000002
+    vertex 2.2577794898144066 30.8 5.0
+    vertex 2.5000000000000027 30.0 0.0
+  endloop
+endfacet
+facet normal -0.9570920264890527 -0.28978414868843105 2.039647263303828e-18
+  outer loop
+    vertex 2.5000000000000027 30.0 0.0
+    vertex 2.2577794898144066 30.8 5.0
+    vertex 2.2577794898144066 30.8 0.0
+  endloop
+endfacet
+facet normal 0.0 0.0 -1.0
+  outer loop
+    vertex 21.442220510185592 35.0 5.0
+    vertex 27.5 30.0 5.0
+    vertex 20.0 35.0 5.0
+  endloop
+endfacet
+facet normal 0.0 0.0 -1.0
+  outer loop
+    vertex 27.5 30.0 5.0
+    vertex 21.442220510185592 35.0 5.0
+    vertex 27.742220510185597 30.8 5.0
+  endloop
+endfacet
+facet normal -0.5547001962252293 -0.8320502943378436 -0.0
+  outer loop
+    vertex 27.5 30.0 5.0
+    vertex 20.0 35.0 0.8000000000000002
+    vertex 27.5 30.0 0.8000000000000002
+  endloop
+endfacet
+facet normal -0.5547001962252293 -0.8320502943378436 -0.0
+  outer loop
+    vertex 20.0 35.0 0.8000000000000002
+    vertex 27.5 30.0 5.0
+    vertex 20.0 35.0 5.0
+  endloop
+endfacet
+facet normal 0.0 -1.0 -0.0
+  outer loop
+    vertex 21.442220510185592 35.0 5.0
+    vertex 20.0 35.0 0.0
+    vertex 21.442220510185592 35.0 0.0
+  endloop
+endfacet
+facet normal 0.0 -1.0 -0.0
+  outer loop
+    vertex 20.0 35.0 0.0
+    vertex 21.442220510185592 35.0 5.0
+    vertex 20.0 35.0 0.8000000000000002
+  endloop
+endfacet
+facet normal 0.0 -1.0 -0.0
+  outer loop
+    vertex 20.0 35.0 0.8000000000000002
+    vertex 21.442220510185592 35.0 5.0
+    vertex 20.0 35.0 5.0
+  endloop
+endfacet
+facet normal -0.5547001962252293 -0.8320502943378436 -0.0
+  outer loop
+    vertex 27.742220510185597 30.8 5.0
+    vertex 21.442220510185592 35.0 0.0
+    vertex 27.742220510185597 30.8 0.0
+  endloop
+endfacet
+facet normal -0.5547001962252293 -0.8320502943378436 -0.0
+  outer loop
+    vertex 21.442220510185592 35.0 0.0
+    vertex 27.742220510185597 30.8 5.0
+    vertex 21.442220510185592 35.0 5.0
+  endloop
+endfacet
+facet normal -0.957092026489053 0.2897841486884302 -0.0
+  outer loop
+    vertex 27.742220510185597 30.8 5.0
+    vertex 27.5 30.0 0.8000000000000002
+    vertex 27.5 30.0 5.0
+  endloop
+endfacet
+facet normal -0.957092026489053 0.2897841486884302 -0.0
+  outer loop
+    vertex 27.5 30.0 0.8000000000000002
+    vertex 27.742220510185597 30.8 5.0
+    vertex 27.5 30.0 0.0
+  endloop
+endfacet
+facet normal -0.957092026489053 0.2897841486884302 -0.0
+  outer loop
+    vertex 27.5 30.0 0.0
+    vertex 27.742220510185597 30.8 5.0
+    vertex 27.742220510185597 30.8 0.0
+  endloop
+endfacet
+facet normal -0.0 -0.0 1.0
+  outer loop
+    vertex 30.0 0.0 0.8000000000000002
+    vertex 0.0 30.0 0.8000000000000002
+    vertex 0.0 0.0 0.8000000000000002
+  endloop
+endfacet
+facet normal -0.0 -0.0 1.0
+  outer loop
+    vertex 0.0 30.0 0.8000000000000002
+    vertex 30.0 0.0 0.8000000000000002
+    vertex 2.5000000000000027 30.0 0.8000000000000002
+  endloop
+endfacet
+facet normal -0.0 -0.0 1.0
+  outer loop
+    vertex 2.5000000000000027 30.0 0.8000000000000002
+    vertex 30.0 0.0 0.8000000000000002
+    vertex 10.0 35.0 0.8000000000000002
+  endloop
+endfacet
+facet normal -0.0 -0.0 1.0
+  outer loop
+    vertex 10.0 35.0 0.8000000000000002
+    vertex 30.0 0.0 0.8000000000000002
+    vertex 20.0 35.0 0.8000000000000002
+  endloop
+endfacet
+facet normal -0.0 -0.0 1.0
+  outer loop
+    vertex 20.0 35.0 0.8000000000000002
+    vertex 30.0 0.0 0.8000000000000002
+    vertex 27.5 30.0 0.8000000000000002
+  endloop
+endfacet
+facet normal -0.0 -0.0 1.0
+  outer loop
+    vertex 27.5 30.0 0.8000000000000002
+    vertex 30.0 0.0 0.8000000000000002
+    vertex 30.0 30.0 0.8000000000000002
+  endloop
+endfacet
+facet normal -0.0 1.0 -0.0
+  outer loop
+    vertex 0.0 30.0 0.8000000000000002
+    vertex 2.5000000000000027 30.0 0.0
+    vertex 0.0 30.0 0.0
+  endloop
+endfacet
+facet normal -0.0 1.0 -0.0
+  outer loop
+    vertex 2.5000000000000027 30.0 0.0
+    vertex 0.0 30.0 0.8000000000000002
+    vertex 2.5000000000000027 30.0 0.8000000000000002
+  endloop
+endfacet
+facet normal 0.5547001962252295 -0.8320502943378435 0.0
+  outer loop
+    vertex 10.0 35.0 0.8000000000000002
+    vertex 2.5000000000000027 30.0 0.0
+    vertex 10.0 35.0 0.0
+  endloop
+endfacet
+facet normal 0.5547001962252295 -0.8320502943378435 0.0
+  outer loop
+    vertex 2.5000000000000027 30.0 0.0
+    vertex 10.0 35.0 0.8000000000000002
+    vertex 2.5000000000000027 30.0 0.8000000000000002
+  endloop
+endfacet
+facet normal -0.0 1.0 -0.0
+  outer loop
+    vertex 10.0 35.0 0.8000000000000002
+    vertex 20.0 35.0 0.0
+    vertex 10.0 35.0 0.0
+  endloop
+endfacet
+facet normal -0.0 1.0 -0.0
+  outer loop
+    vertex 20.0 35.0 0.0
+    vertex 10.0 35.0 0.8000000000000002
+    vertex 20.0 35.0 0.8000000000000002
+  endloop
+endfacet
+facet normal -0.0 1.0 0.0
+  outer loop
+    vertex 27.5 30.0 0.8000000000000002
+    vertex 30.0 30.0 0.0
+    vertex 27.5 30.0 0.0
+  endloop
+endfacet
+facet normal -0.0 1.0 0.0
+  outer loop
+    vertex 30.0 30.0 0.0
+    vertex 27.5 30.0 0.8000000000000002
+    vertex 30.0 30.0 0.8000000000000002
+  endloop
+endfacet
+facet normal 1.0 0.0 0.0
+  outer loop
+    vertex 30.0 30.0 0.0
+    vertex 30.0 0.0 0.8000000000000002
+    vertex 30.0 0.0 0.0
+  endloop
+endfacet
+facet normal 1.0 0.0 0.0
+  outer loop
+    vertex 30.0 0.0 0.8000000000000002
+    vertex 30.0 30.0 0.0
+    vertex 30.0 30.0 0.8000000000000002
+  endloop
+endfacet
+facet normal -0.0 -1.0 -0.0
+  outer loop
+    vertex 30.0 0.0 0.8000000000000002
+    vertex 0.0 0.0 0.0
+    vertex 30.0 0.0 0.0
+  endloop
+endfacet
+facet normal -0.0 -1.0 -0.0
+  outer loop
+    vertex 0.0 0.0 0.0
+    vertex 30.0 0.0 0.8000000000000002
+    vertex 0.0 0.0 0.8000000000000002
+  endloop
+endfacet
+facet normal -1.0 0.0 0.0
+  outer loop
+    vertex 0.0 30.0 0.8000000000000002
+    vertex 0.0 0.0 0.0
+    vertex 0.0 0.0 0.8000000000000002
+  endloop
+endfacet
+facet normal -1.0 0.0 0.0
+  outer loop
+    vertex 0.0 0.0 0.0
+    vertex 0.0 30.0 0.8000000000000002
+    vertex 0.0 30.0 0.0
+  endloop
+endfacet
+endsolid PumpController-XbeeInsulatorPlate
