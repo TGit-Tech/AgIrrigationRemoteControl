@@ -8,64 +8,69 @@
  *    tgit23        01/2017       Original
  *    tgit23        07/2017       Implemented keypad button interrupts and Non-Blocking functionality
 **********************************************************************************************************************/
-#define BUILD_VERSION 20170622
 #include <LiquidCrystal.h>
 #include <EEPROM.h>
 #include <PeerIOSerialControl.h>        //See https://github.com/tgit23/PeerIOSerialControl
 #include <SSoftwareSerial.h>            //See 
 
-//---[ UNIT SETTINGS ]-------------------------------------------------------------------------------------------------
-#define TRANSCEIVER_ID 1                // Unique numeric (ID)entity for this Unit(1-15)
-#define XBEECONFIG 0                    // Configure the XBEE using XCTU Digi Software by setting this to 1
-#define DEBUG 0                         // Set this to 1 for Serial DEBUGGING messages ( Firmware development use only )
+//=====================================================================================================================
+//------------------------------ SIMPLE USER CONFIGURATION SETTINGS ---------------------------------------------------
+//=====================================================================================================================
+#define BUILD_VERSION                     20170622  // Release Version used to Build the Unit ( without the dots )
+#define TRANSCEIVER_ID                    1         // Unique numeric (ID)entity for this Unit(1-15)
+#define XBEECONFIG                        0         // Configure the XBEE using XCTU Digi Software by setting this to 1
+#define ULTRASONIC_WATER_LEVEL_INSTALLED  0         // 0 = NO, 1 = YES ( Wire TRIG -> D4, ECHO -> D5 )
+#define WATER_PRESSURE_INSTALLED          0         // 0 = NO, 1 = YES ( Wire SENSE -> A3 )
+
+//^^^[ END - SIMPLE USER CONFIGURATION SETTINGS ]^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+//---------------------------------------------------------------------------------------------------------------------
 
 //---[ PROGRAM BEHAVIOR ]----------------------------------------------------------------------------------------------
-#define WAIT_REPLY_MS         3000      // How long to wait for a XBee reply
+#define WAIT_REPLY_MS         3000      // How long to wait for an XBee reply
 #define START_STATUS_ITERATE  30000     // Start iterating Menu-Items after idle for (ms)
 #define ITERATE_EVERY         5000      // Iterate Menu-Items every (ms); when idle
 #if XBEECONFIG>0
-#define NONBLOCKING           0         // Digi XCTU has problems with interupts active
+#define NONBLOCKING           0         // Digi-Xbee-XCTU configuration software has problems with active interupts
 #else
 #define NONBLOCKING           1         // Blocking mode (0) stalls screen till item is gotten, (1) releases screen
+#endif
+#define DEBUG 0                         // Set this to 1 for Serial DEBUGGING messages ( Firmware development use only )
+#if DEBUG>0                             // Activate Debug Messages
+  #define DBL(x) Serial.println x
+  #define DB(x) Serial.print x
+  #define DBC Serial.print(", ")
+#else                                   // ELSE - Clear Debug Messages
+  #define DBL(x)
+  #define DB(x)
+  #define DBC  
 #endif
 
 //---[ HAND-REMOTE PIN SETTINGS ]--------------------------------------------------------------------------------------
 LiquidCrystal lcd(8, 9, 4, 5, 6, 7);    // Pins used by the LCD Keypad Shield
 #if BUILD_VERSION>20170524
-#define SS_TX_PIN 2                     // TX -> XBEE-DIN ( Closest to UNO )
-#define SS_RX_PIN 3                     // RX -> XBEE-DOUT ( Farthest from UNO )
-#define SBUZZ 12                        // Buzzer Signal Pin (S)
-#define PBUZZ 13                        // Buzzer Power Pin (+)
-#define BATT_R1_VINTOA1 1500            // Integer Value of BATTVOLT Resistor VIN -> A1 in KOhms
-#define BATT_R2_A1TOGND 510             // Integer Value of BATTVOLT Resistor A1 -> GND in KOhms
-#else
-#define SS_TX_PIN 11                    // TX -> XBEE-DIN ( Closest to UNO )
-#define SS_RX_PIN 12                    // RX -> XBEE-DOUT ( Farthest from UNO )
-#define SBUZZ 2                         // Buzzer Signal Pin (S)
+  #define SS_TX_PIN 2                     // TX -> XBEE-DIN ( Closest to UNO )
+  #define SS_RX_PIN 3                     // RX -> XBEE-DOUT ( Farthest from UNO )
+  #define SBUZZ 12                        // Buzzer Signal Pin (S)
+  #define PBUZZ 13                        // Buzzer Power Pin (+)
+  #define BATT_R1_VINTOA1 1500            // Integer Value of BATTVOLT Resistor VIN -> A1 in KOhms
+  #define BATT_R2_A1TOGND 510             // Integer Value of BATTVOLT Resistor A1 -> GND in KOhms
+#else                                   // ------ Release 2017.05.24 -------------------------------
+  #define SS_TX_PIN 11                    // TX -> XBEE-DIN ( Closest to UNO )
+  #define SS_RX_PIN 12                    // RX -> XBEE-DOUT ( Farthest from UNO )
+  #define SBUZZ 2                         // Buzzer Signal Pin (S)
 #endif
 
 //---[ PROGRAM CONSTANTS ]---------------------------------------------------------------------------------------------
-enum Button { UP, DOWN, RIGHT, LEFT, SELECT, NONE };
+enum Button       { UP, DOWN, RIGHT, LEFT, SELECT, NONE };
 enum eValModifier { RAW, PRESSURE, BATTVOLTS };
-#define NOPIN        0xFF               // 255 (unit8_t) = 'NOPIN'
-#define MAIN 0                          // Menu[#].Sub[0-MAIN] for currently-read value of the Menu Item
-#define VALID true                      // Is Menu[#].Sub[MAIN].State a 'VALID' (read) value?
-#define SET 1                           // Menu[#].Sub[1-SET] for SET values to await being applied to the MAIN-Value
-#define SETTABLE true                   // Does Menu[#].Sub[SET].State allow 'SETTABLE' values by the user
-#define LOALARM 2                       // Menu[#].Sub[2-LOALARM] for storing Low Alarm value to test the MAIN-Value
-#define HIALARM 3                       // Menu[#].Sub[3-HIALARM] for storing High Alarm value to test the MAIN-Value
-#define ON true                         // Is the "Menu[#].Sub[??ALARM].State" (ALARM) ON or NOT-ON?
-
-//---[ DEBUG ]---------------------------------------------------------------------------------------------------------
-#if DEBUG>0
-  #define DBL(x) Serial.println x
-  #define DB(x) Serial.print x
-  #define DBC Serial.print(", ")
-#else
-  #define DBL(x)
-  #define DB(x)
-  #define DBC  
-#endif
+#define NOPIN     0xFF                // 255 (unit8_t) = 'NOPIN'
+#define MAIN      0                   // Menu[#].Sub[0-MAIN] for currently-read value of the Menu Item
+#define VALID     true                // Is Menu[#].Sub[MAIN].State a 'VALID' (read) value?
+#define SET       1                   // Menu[#].Sub[1-SET] for SET values to await being applied to the MAIN-Value
+#define SETTABLE  true                // Does Menu[#].Sub[SET].State allow 'SETTABLE' values by the user
+#define LOALARM   2                   // Menu[#].Sub[2-LOALARM] for storing Low Alarm value to test the MAIN-Value
+#define HIALARM   3                   // Menu[#].Sub[3-HIALARM] for storing High Alarm value to test the MAIN-Value
+#define ON        true                // Is the "Menu[#].Sub[??ALARM].State" (ALARM) ON or NOT-ON?
 
 //---[ Globals ]-------------------------------------------------------------------------------------------------------
 SSoftwareSerial IOSerial(SS_RX_PIN,SS_TX_PIN);              // SoftSerial for XBEE ( rxPin, txPin ) - allows interrupts
@@ -74,13 +79,11 @@ void GetItem(int i = -1);                                   // Predefine headers
 void CheckAlarms(int i = -1);
 void EEPROMGet(int i = -1);
 
-// --- Timers ---
 volatile unsigned long last_bpress_millis = 0;              // Track last button press time
 volatile int last_bpress = 1000;                            // Store last button press for processing
 unsigned long wait_reply = 0;                               // Track non-blocking reply time
 unsigned long last_iter_millis = 0;                         // Track last status iteration time
 
-// --- Counters / Trackers ---
 int idx = 0;                                                // Track Menu index item
 int SubIdx = 0;                                             // Track current menu value item
 int ButtonHeld = 0;                                         // Increment values by 10 when button is held
@@ -89,12 +92,10 @@ bool bIterating = false;                                    // Alarm only active
 int MenuItemsIdx = 0;                                       // Track the Menu Index (mi)
 int PacketID = -1;                                          // For non-blocking communications
 
-//---[ Menu-Item Constants ]-------------------------------------------------------------------------------------------
+//---[ Menu-Item Structure and Constants ]-----------------------------------------------------------------------------
 #define BATT 0                            // Menu[BATT] monitors the battery voltage level
 #define MAX_MENU_ITEMS 15                 // Maximum number of Menu Items allowed ( using 71% dynamic memory )
 #define MAXOPTIONS 2                      // Maximum number of Menu Item Options allowed
-
-//---[ SETUP the MENU[#].Sub[?] Structure ]----------------------------------------------------------------------------
 struct uDevices {
   char            *Text;                  // Text to designate the Unit a Menu Item will control
   int             TransceiverID = 0;      // The TransceiverID set on the Unit the Menu Item will control
@@ -120,7 +121,7 @@ struct MenuItems {
 } Menu[MAX_MENU_ITEMS];                   
 
 //=====================================================================================================================
-//------------------------------ MENU STRUCTURE ( CONFIGURABLE ) ------------------------------------------------------
+//------------------------------ MENU STRUCTURE ( ADVANCED CONFIGURATION ) --------------------------------------------
 //=====================================================================================================================
 /******************************************************************************************************************//**
  * @brief  Setup the LCD menu
@@ -150,25 +151,27 @@ void SetupMenu() {
   idx = MenuItemsIdx;                                       // !!!-- Set where the Menu will start --!!!
   Menu[MenuItemsIdx].Device = DitchPump;
   Menu[MenuItemsIdx].Pin = 7;                               // Power is set/got on all Pump-Controller's on pin [D7]
-  Menu[MenuItemsIdx].Text = "Power(D)";                     // Create a menu item for Power Control
+  Menu[MenuItemsIdx].Text = "Power(P)";                     // Create a menu item for Power Control
   Menu[MenuItemsIdx].Sub[SET].State = SETTABLE;             // Allow this Value to be 'SET' by the user
-  Menu[MenuItemsIdx].Sub[LOALARM].ID = 'd';                 // A Low Alarm is identified by a lower-case 'p'
-  Menu[MenuItemsIdx].Sub[HIALARM].ID = 'D';                 // A High Alarm is identified by an upper-case 'P'
+  Menu[MenuItemsIdx].Sub[LOALARM].ID = 'p';                 // A Low Alarm is identified by a lower-case 'p'
+  Menu[MenuItemsIdx].Sub[HIALARM].ID = 'P';                 // A High Alarm is identified by an upper-case 'P'
   Menu[MenuItemsIdx].Option[0].Text = "Off";                // Power can be "Off"             - Option #0 = Off
   Menu[MenuItemsIdx].Option[0].Value = LOW;                 // "Off" will be the value 'LOW"  - Off = LOW
   Menu[MenuItemsIdx].Option[1].Text = "On";                 // Power can be "On"              - Option #1 = On
   Menu[MenuItemsIdx].Option[1].Value = HIGH;                // "On" will be the value 'HIGH'  - On = HIGH
   Menu[MenuItemsIdx].LastOptionIdx = 1;                     // Last Option Index defined      - Number of Options - 1  
-/*  
+  
   //-----------------------------------------
+#if ULTRASONIC_WATER_LEVEL_INSTALLED>0
   MenuItemsIdx++;
   Menu[MenuItemsIdx].Device = DitchPump;
   Menu[MenuItemsIdx].Pin = 64;                              // Water Level is read from VIRTUAL (Pump-Controllers firmware) pin 64           
   Menu[MenuItemsIdx].Text = "Water (L)";                    // Create a menu item for Water Level Transducer
   Menu[MenuItemsIdx].Sub[LOALARM].ID = 'l';                 // A Low Alarm is identified by a lower-case 'l'
   Menu[MenuItemsIdx].Sub[HIALARM].ID = 'L';                 // A High Alarm is identified by an upper-cse 'L'
-  
+#endif
   //-----------------------------------------
+#if WATER_PRESSURE_INSTALLED>0
   MenuItemsIdx++;
   Menu[MenuItemsIdx].Device = DitchPump;
   Menu[MenuItemsIdx].Pin = A3;                              // The 'signal' is gotten on all Pump-Controllers on pin [A3]
@@ -176,7 +179,8 @@ void SetupMenu() {
   Menu[MenuItemsIdx].ValueModifier = PRESSURE;              // Modify value to display PSI instead of MPa
   Menu[MenuItemsIdx].Sub[LOALARM].ID='r';                   // A Low Pressure alarm is identified by a lower-case 'r'
   Menu[MenuItemsIdx].Sub[HIALARM].ID='R';                   // A High Pressure alarm is identified by an upper-case 'R'
-/*  
+#endif
+/*// UN-COMMENT BELOW FOR A SECOND PUMP-CONTROLLER ( NAMED "Canal Pump" ) WITH TRANSCEIVER_ID = 11  
   //-----------------------------------------
   MenuItemsIdx++;
   Menu[MenuItemsIdx].Text = "Power(C)";                     // Create a menu item for Power Control
