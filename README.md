@@ -25,7 +25,7 @@ I'll be building a few of these units complete with
     - A 480VAC or higher Solid State Relay for Motor Starter Control
     - 600V THHN Hook-Up wire required to Motor control installation
 
-Purcahse for $329 at: https://www.etsy.com/listing/525674784/agriculture-3-phase-480vac-irrigation
+Purchase for $329 at: https://www.etsy.com/listing/525674784/agriculture-3-phase-480vac-irrigation
 
 If you'd like to purchase just a single unit or the Water-Level and Pressure expansion kits; you can email me directly at tgit28@gmail.com
 
