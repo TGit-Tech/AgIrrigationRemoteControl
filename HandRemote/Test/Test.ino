@@ -592,7 +592,7 @@ void setup(){
   PCMSK1 = 0b00000001;          // Pin Change Interrupt Mask ( NA, RESET, A5, A4, A3, A2, A1, A0 )               
   interrupts();                 // turn interrupts back on
 #endif
-  pinMode(10,INPUT);                                // Fix for Q1-LCD Backlit shorting issue
+  pinMode(10,INPUT);                         // Fix for Q1-LCD Backlit shorting issue
   #ifdef PBUZZ
   pinMode(PBUZZ,OUTPUT);digitalWrite(PBUZZ, HIGH);  // Supply Power to Buzzer (+)
   #endif
