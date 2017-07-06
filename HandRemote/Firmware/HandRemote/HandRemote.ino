@@ -16,7 +16,7 @@
 //=====================================================================================================================
 //------------------------------ SIMPLE USER CONFIGURATION SETTINGS ---------------------------------------------------
 //=====================================================================================================================
-#define BUILD_VERSION                     20170622  // Release Version used to Build the Unit ( without the dots )
+#define BUILD_VERSION                     20170706  // Release Version used to Build the Unit ( without the dots )
 #define TRANSCEIVER_ID                    1         // Unique numeric (ID)entity for this Unit(1-15)
 #define XBEECONFIG                        0         // Configure the XBEE using XCTU Digi Software by setting this to 1
 #define ULTRASONIC_WATER_LEVEL_INSTALLED  0         // 0 = NO, 1 = YES ( Wire TRIG -> D4, ECHO -> D5 )
@@ -34,7 +34,7 @@
 #else
 #define NONBLOCKING           1         // Blocking mode (0) stalls screen till item is gotten, (1) releases screen
 #endif
-#define DEBUG 0                         // Set this to 1 for Serial DEBUGGING messages ( Firmware development use only )
+#define DEBUG                 0         // Set this to 1 for Serial DEBUGGING messages ( Firmware development use only )
 #if DEBUG>0                             // Activate Debug Messages
   #define DBL(x) Serial.println x
   #define DB(x) Serial.print x
@@ -52,13 +52,13 @@ LiquidCrystal lcd(8, 9, 4, 5, 6, 7);    // Pins used by the LCD Keypad Shield
   #define SS_RX_PIN 3                     // RX -> XBEE-DOUT ( Farthest from UNO )
   #define SBUZZ 12                        // Buzzer Signal Pin (S)
   #define PBUZZ 13                        // Buzzer Power Pin (+)
-  #define BATT_R1_VINTOA1 1500            // Integer Value of BATTVOLT Resistor VIN -> A1 in KOhms
-  #define BATT_R2_A1TOGND 510             // Integer Value of BATTVOLT Resistor A1 -> GND in KOhms
-#else                                   // ------ Release 2017.05.24 -------------------------------
+#else                                   // vvvvvvvv [ Build Release 2017.05.24 Pins ] vvvvvvvvvvvvvv
   #define SS_TX_PIN 11                    // TX -> XBEE-DIN ( Closest to UNO )
   #define SS_RX_PIN 12                    // RX -> XBEE-DOUT ( Farthest from UNO )
   #define SBUZZ 2                         // Buzzer Signal Pin (S)
-#endif
+#endif                                  // ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+#define BATT_R1_VINTOA1   1500          // Integer Value of BATTVOLT Resistor VIN -> A1 in KOhms
+#define BATT_R2_A1TOGND   510           // Integer Value of BATTVOLT Resistor A1 -> GND in KOhms
 
 //---[ PROGRAM CONSTANTS ]---------------------------------------------------------------------------------------------
 enum Button       { UP, DOWN, RIGHT, LEFT, SELECT, NONE };
@@ -80,7 +80,8 @@ void CheckAlarms(int i = -1);
 void EEPROMGet(int i = -1);
 
 volatile unsigned long last_bpress_millis = 0;              // Track last button press time
-volatile int last_bpress = 1000;                            // Store last button press for processing
+Button last_bpress = NONE;                                  // Store last button press for processing
+Button prev_bpress = NONE;                                  // Used to count ButtonHeld counter
 unsigned long wait_reply = 0;                               // Track non-blocking reply time
 unsigned long last_iter_millis = 0;                         // Track last status iteration time
 
@@ -212,7 +213,7 @@ void SetupMenu() {
   Menu[MenuItemsIdx].ValueModifier = PRESSURE;              // Modify value to display PSI instead of MPa
   Menu[MenuItemsIdx].Sub[LOALARM].ID='s';                   // A Low Pressure alarm is identified by a lower-case 's'
   Menu[MenuItemsIdx].Sub[HIALARM].ID='S';                   // A High Pressure alarm is identified by an upper-case 'S'
-*/  
+  */
   //------------[ Start-Up the Display ( DO NOT CHANGE! )]-------------  
   for ( int i = 0; i <= MenuItemsIdx; i++ ) {
     if ( Menu[i].Sub[LOALARM].ID != NULL || Menu[i].Sub[HIALARM].ID != NULL ) {
@@ -221,6 +222,48 @@ void SetupMenu() {
   }
   GetItem();                                                // Get starting Menu item
   LCD_display();                                            // Update the display
+}
+
+/******************************************************************************************************************//**
+ * @brief  Function to modify raw values into meaningful information
+ * @code
+ *   exmaple code
+ * @endcode
+**********************************************************************************************************************/
+int ValueModify(int Index, int SubIndex, int AddBy = 0) {
+  int RetVal = 0;       // Return value
+  int iVal = 0;         // Initial value before adding or subtracting
+  bool bOnce = true;
+  
+  do {  //------------ Modify RAW values to meaningful Values ---------------------------------------------
+    
+    // Change Pressure MPa Raw value to PSI ( pounds per square inch )
+    if ( Menu[Index].ValueModifier == PRESSURE ) {
+      RetVal = (int) ((Menu[Index].Sub[SubIndex].Value - 97) * 0.2137);
+
+    // Calculate voltage from Resistors used in Voltage Divider
+    } else if ( Menu[Index].ValueModifier == BATTVOLTS ) {
+      RetVal = (long(Menu[Index].Sub[SubIndex].Value)*BATT_R1_VINTOA1)/long(1.6*BATT_R2_A1TOGND);
+
+    // No Modification - just return raw value
+    } else {
+      RetVal = Menu[Index].Sub[SubIndex].Value;
+    }
+
+    // -------------- Change meaningful Value by 'AddBy' --------------------------------------------------
+    if ( AddBy == 0 ) break;
+    if (bOnce) {
+      iVal = RetVal; bOnce = false; continue;
+    } else {
+      if( AddBy>0 ) { Menu[Index].Sub[SubIndex].Value++; } else { Menu[Index].Sub[SubIndex].Value--; }
+    }
+
+    // If adding - keep adding till the return value is no longer less than 'AddBy'
+    // If subtracting - keep subtracting till the return value is no longer greater than 'AddBy'
+  } while ( (AddBy > 0 && (RetVal < iVal + AddBy)) || ( AddBy < 0 && (RetVal > iVal + AddBy)) );
+  
+
+  return RetVal;
 }
 
 /******************************************************************************************************************//**
@@ -481,19 +524,7 @@ void LCD_display() {
       if ( Menu[idx].Sub[SubIdx].Value < 0 || Menu[idx].Sub[SubIdx].Value > Menu[idx].LastOptionIdx ) Menu[idx].Sub[SubIdx].Value = 0;
       lcd.print(Menu[idx].Option[Menu[idx].Sub[SubIdx].Value].Text); 
     } else {
-      
-      //----------- Value Modifiers or Display Raw Value ---------------
-      if ( Menu[idx].ValueModifier == PRESSURE ) {
-        // Pressure MPa Raw value to PSI ( pounds per square inch )
-        lcd.print( (int) ((Menu[idx].Sub[SubIdx].Value - 97) * 0.2137) );
-      } else if ( Menu[idx].ValueModifier == BATTVOLTS ) {
-        lcd.print( (long(Menu[idx].Sub[SubIdx].Value)*BATT_R1_VINTOA1)/long(1.6*BATT_R2_A1TOGND) );
-      } else {
-        // General Raw Value Display
-        lcd.print(Menu[idx].Sub[SubIdx].Value);
-      }
-      //----------------------------------------------------------------
-      
+      lcd.print( ValueModify(idx,SubIdx) );
     }
   }
 #endif
@@ -510,10 +541,18 @@ void LCD_display() {
 **********************************************************************************************************************/
 void ButtonCheck(int adc_value) {
   unsigned long clk = millis();
-  if ( adc_value > 1000 ) return;                       // >1000 is NO button press
-  if ( clk - last_bpress_millis < 500 ) return;         // Debounce button presses
-  last_bpress = adc_value;
-  last_bpress_millis = millis();
+  if ( clk - last_bpress_millis < 200 ) return;         // Debounce button presses
+
+  if (adc_value > 1000) { last_bpress = NONE; }
+  else if (adc_value < 50) { last_bpress = RIGHT; }
+  else if (adc_value < 195) { last_bpress = UP; }
+  else if (adc_value < 380) { last_bpress = DOWN; }
+  else if (adc_value < 555) { last_bpress = LEFT; }
+  else if (adc_value < 790) { last_bpress = SELECT; }
+
+  if ( prev_bpress == last_bpress ) { ButtonHeld++; } else { ButtonHeld=0; }
+  prev_bpress = last_bpress;
+  if ( last_bpress != NONE ) last_bpress_millis = millis();
 }
 
 #if NONBLOCKING>0
@@ -521,7 +560,7 @@ void ButtonCheck(int adc_value) {
  * @brief  ISR ( Interrupt Service Routine ) for Keypad Up, Down, and Right arrow buttons.
  * @remarks
  * - PCINT1_vect Pin Change Interrupt will not trigger on Left or Select buttons ( digital threshold? )
- * - The interrupt stores the button pressed until it can be processed by the loop() function.
+ * - The interrupt stores the button pressed by calling ButtonCheck() and processes it when the loop() is called.
  * - The original SoftwareSerial Library calls ALL Interrupts so a modified 'SSoftwareSerial' must be used to compile
 **********************************************************************************************************************/
 ISR(PCINT1_vect) {
@@ -536,34 +575,34 @@ ISR(PCINT1_vect) {
 **********************************************************************************************************************/
 void setup(){
 
+  pinMode(10, INPUT);           // Fix for Q1-LCD Backlit shorting issue
   pinMode(A1, INPUT);           // A0 Controlled by LCD-Display library.
   pinMode(A2, INPUT_PULLUP);    // A1 is used by the Battery Level Indicator.
   pinMode(A3, INPUT_PULLUP);    // Keep all other Analog pins from floating
   pinMode(A4, INPUT_PULLUP);    // so 'PCINT1_vect' interrupt only triggers
   pinMode(A5, INPUT_PULLUP);    // when analog pin A0 changes
 #if NONBLOCKING>0
-  //Activate A0 Interrupt
   noInterrupts();               // switch interrupts off while messing with their settings  
   PCICR =0x02;                  // Enable 'PCIE1' bit of PCICR Pin Change Interrupt the PCINT1 interrupt
-  PCMSK1 = 0b00000001;          // Pin Change Interrupt Mask ( NA, RESET, A5, A4, A3, A2, A1, A0 )               
+  PCMSK1 = 0b00000001;          // Pin Change Interrupt Mask ( NA, RESET, A5, A4, A3, A2, A1, A0 ) - Activate A0              
   interrupts();                 // turn interrupts back on
 #endif
-  pinMode(10,INPUT);                                // Fix for Q1-LCD Backlit shorting issue
-  #ifdef PBUZZ
-  pinMode(PBUZZ,OUTPUT);digitalWrite(PBUZZ, HIGH);  // Supply Power to Buzzer (+)
-  #endif
-  #ifdef GBUZZ
-  pinMode(GBUZZ,OUTPUT);digitalWrite(GBUZZ, LOW);   // Supply Ground to Buzzer (-)
-  #endif
-  pinMode(SBUZZ,OUTPUT);                            // Buzzer Signal Pin (S)
-  pinMode(SS_RX_PIN, INPUT);                        // XBee DOUT Pin
-  pinMode(SS_TX_PIN, OUTPUT);                       // XBee DIN Pin
+  
+#ifdef PBUZZ
+  pinMode(PBUZZ,OUTPUT);digitalWrite(PBUZZ, HIGH);  // Supply Power to Buzzer (+) if needed
+#endif
+#ifdef GBUZZ
+  pinMode(GBUZZ,OUTPUT);digitalWrite(GBUZZ, LOW);   // Supply Ground to Buzzer (-) if needed
+#endif
+  pinMode(SBUZZ,OUTPUT);        // Buzzer Signal Pin (S)
+  pinMode(SS_RX_PIN, INPUT);    // XBee DOUT Pin
+  pinMode(SS_TX_PIN, OUTPUT);   // XBee DIN Pin
     
+  XBee.Timeout(WAIT_REPLY_MS);  // Set the Timeout for XBEE communications initialized in SetupMenu()
   IOSerial.begin(9600);         // Start UART Communications with the XBee->Module
   Serial.begin(9600);           // Start Serial Monitor for debug
   lcd.begin(16, 2);             // Start the LCD library
   SetupMenu();                  // Setup the Menu Items
-  XBee.Timeout(WAIT_REPLY_MS);  // Set the Timeout for XBEE communications
   LCD_display();                // Display the main menu
 }
 
@@ -583,7 +622,8 @@ void loop(){
   if ( Serial.available()>0 ) IOSerial.write(Serial.read());
 #else
 //^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  XBee.Available();                                             // Check communications
+
+  XBee.Available();                                             // Check communications 
   
   #if NONBLOCKING>0                                             // Check for Non-Blocked Replies
     if ( PacketID != -1 ) {                                     // Assign Non-Blocking Get Items
@@ -603,18 +643,11 @@ void loop(){
   #endif
 
   unsigned long clk = millis(); 
-  Button bpress = NONE;                                         // Determine button pressed
-  if (last_bpress > 1000) { bpress = NONE; }
-  else if (last_bpress < 50) { bpress = RIGHT; }
-  else if (last_bpress < 195) { bpress = UP; }
-  else if (last_bpress < 380) { bpress = DOWN; }
-  else if (last_bpress < 555) { bpress = LEFT; }
-  else if (last_bpress < 790) { bpress = SELECT; }
-  last_bpress = 1023;                                           // Release button press
+  Button bpress = last_bpress;                                  // Determine button pressed
+  last_bpress = NONE;                                           // Release button press
   
   //--- Iterate Menu while Idle ---------------------------------------------------------------------
   if( bpress == NONE ) {
-    ButtonHeld = 0;
     if ( clk - last_bpress_millis > START_STATUS_ITERATE) bIterating = true;
     if ( bIterating && (( clk - last_iter_millis ) > ITERATE_EVERY) && !AlarmActive ) {
           SubIdx = MAIN;                                        // Switch to 'MAIN' menu items
@@ -660,9 +693,9 @@ void loop(){
           if ( Menu[idx].Sub[SubIdx].Value > Menu[idx].LastOptionIdx ) {      // Boundary Check
             Menu[idx].Sub[SubIdx].Value = 0; }                                // Reset on Boundary
         } else if ( ButtonHeld < 5 ) {                                    // Increment Value
-          Menu[idx].Sub[SubIdx].Value++;                                    // Change Value up 1
+          ValueModify(idx,SubIdx,1);                                      // Change Value up 1
         } else {                                                          // Multi-Increment Value
-          Menu[idx].Sub[SubIdx].Value = Menu[idx].Sub[SubIdx].Value + 10;   // Change Value up 10
+          ValueModify(idx,SubIdx,5);                                      // Change Value up 10
         }
         if ( Menu[idx].Sub[SubIdx].Value > 1023 ) Menu[idx].Sub[SubIdx].Value = 1023; // Stop Value change at 1023
       }
@@ -680,9 +713,9 @@ void loop(){
           if ( Menu[idx].Sub[SubIdx].Value < 0) {                                   // Boundary Check
             Menu[idx].Sub[SubIdx].Value = Menu[idx].LastOptionIdx; }                // Reset on Boundary
         } else if ( ButtonHeld < 5 ) {                                          // Decrement Value
-          Menu[idx].Sub[SubIdx].Value--;                                          // Change Value down 1
+          ValueModify(idx,SubIdx,-1);                                             // Change Value down 1
         } else {                                                                // Multi-Decrement Value
-          Menu[idx].Sub[SubIdx].Value = Menu[idx].Sub[SubIdx].Value - 10;         // Change Value down 10
+          ValueModify(idx,SubIdx,-5);                                            // Change Value down 10
         }
         if ( Menu[idx].Sub[SubIdx].Value < 0 ) Menu[idx].Sub[SubIdx].Value = 0; // Stop Value change at 0
       }
@@ -711,8 +744,8 @@ void loop(){
     }
     
     LCD_display();                                      // Update Display after button press
-    ButtonHeld++;                                       // Mark how long the button stays pressed
-  } 
+  }
+  
 #endif
 }
 

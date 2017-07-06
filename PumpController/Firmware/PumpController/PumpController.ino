@@ -19,7 +19,7 @@
 #define SS_RX_PIN 3                     // XBee DOUT
 #define PUMP_POWER_PIN 7                // Pump Power Pin ( Blue twisted pair )
 #define PUMP_AUX_CONTACT 0              // Pump Power Aux Contact ( Green twisted pair ) 0-to deactivate
-#define ULTRASONIC_PRESENT 0            // 1=UltraSonic Level Monitor Attached, 0=No UltraSonic
+#define ULTRASONIC_PRESENT 1            // 1=UltraSonic Level Monitor Attached, 0=No UltraSonic
 #define ULTRASONIC_TRIG_PIN 4           // UltraSonic Trigger Pin
 #define ULTRASONIC_ECHO_PIN 5           // UltraSonic Echo Pin
 #define ULTRASONIC_MAX_DIST 400         // Longest Distance to Measure
@@ -30,7 +30,7 @@ PeerIOSerialControl XBee(TRANSCEIVER_ID,IOSerial,Serial);    // ArduinoID, IOSer
 
 #if ULTRASONIC_PRESENT>0
 #include <NewPing.h>
-NewPing sonar(US_TRIG_PIN, ULTRASONIC_ECHO_PIN, ULTRASONIC_MAX_DIST);
+NewPing sonar(ULTRASONIC_TRIG_PIN, ULTRASONIC_ECHO_PIN, ULTRASONIC_MAX_DIST);
 unsigned long ulLastPing = 0;
 #endif
 
@@ -46,8 +46,8 @@ void setup(){
     pinMode(6,OUTPUT);
     pinMode(7,OUTPUT);
 #if ULTRASONIC_PRESENT>0
-    pinMode(US_TRIG_PIN, OUTPUT);
-    pinMode(US_ECHO_PIN, INPUT);
+    pinMode(ULTRASONIC_TRIG_PIN, OUTPUT);
+    pinMode(ULTRASONIC_ECHO_PIN, INPUT);
 #endif
 #if PUMP_AUX_CONTACT>0
     pinMode(PUMP_AUX_CONTACT, INPUT_PULLUP);
