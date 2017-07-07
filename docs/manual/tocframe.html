@@ -2,18 +2,18 @@
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <META http-equiv="Content-Type" content="text/html; charset=UTF-8">
-<title>Agriculture Remote Control</title>
+<title>AgIrrigationPumpRemoteControl</title>
 <meta HTTP-EQUIV="CONTENT-TYPE" CONTENT="text/html; charset=UTF-8">
-<meta name="description" content="Using Arduino UNO and XBEE RF">
+<meta name="description" content="Agriculture Pump Remote Control for 3-Phase 480VAC Electrical Panels">
 <meta name="keywords" content="">
 <meta name="author" content="">
-<meta name="email" content="tgit28@gmail.com">
+<meta name="email" content="">
 <meta name="copyright" content="">
 <link href="style.css" rel="stylesheet" type="text/css">
 </head>
 <table width="100%" height="654" border="0" cellpadding="0" cellspacing="0" class="tcolor">
 <tr>
-<td height="80" colspan="2" class="toctitle">Agriculture Remote Control</td>
+<td height="80" colspan="2" class="toctitle">AgIrrigationPumpRemoteControl</td>
 </tr>
 <tr>
 <td width="40" height="200" align="center" class="ccolor">
@@ -27,108 +27,131 @@
 	<DIV ID="Table of Contents1_Head" DIR="LTR">
 		<P><FONT FACE="Arial"><FONT SIZE=3><B>Table of Contents</B></FONT></FONT></DIV>
 	<DL>
-		<DT><FONT FACE="Ebrima"><FONT SIZE=1>1. <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__2026_329140064">INTRODUCTION</A>	2</FONT></FONT><DT>
-		<FONT FACE="Ebrima"><FONT SIZE=1>1.1 <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__4075_298041450">Feature
-		and Limitations</A>	2</FONT></FONT><DT>
-		<FONT FACE="Ebrima"><FONT SIZE=1>1.2 <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__2521_1828715825">Bill
-		Of Materials (BOM) - $241.26</A>	2</FONT></FONT><DD>
-		<FONT FACE="Ebrima"><FONT SIZE=1>A. <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__2523_1828715825">Pump-Panel
-		Components ( $99.50 )</A>	3</FONT></FONT><DD>
-		<FONT FACE="Ebrima"><FONT SIZE=1>B. <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__2525_1828715825">Electronic
-		Control ( $39.10 )</A>	4</FONT></FONT><DD>
-		<FONT FACE="Ebrima"><FONT SIZE=1>C. <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__2527_1828715825">RF
-		Electronics ( $80.88 )</A>	5</FONT></FONT><DD>
-		<FONT FACE="Ebrima"><FONT SIZE=1>D. <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__9434_979114514">Wire
-		( $26.70 )</A>	5</FONT></FONT><DD>
-		<FONT FACE="Ebrima"><FONT SIZE=1>E. <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__9436_979114514">Tools
-		Required ( $NA )</A>	6</FONT></FONT><DT>
-		<FONT FACE="Ebrima"><FONT SIZE=1>2. <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__3128_1828715825">HAND-REMOTE</A>	6</FONT></FONT><DT>
-		<FONT FACE="Ebrima"><FONT SIZE=1>2.1 <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__14918_1772690841">Electronics
-		Assembly</A>	6</FONT></FONT><DD>
-		<FONT FACE="Ebrima"><FONT SIZE=1>A. <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__9602_1828715825">LCD
-		Keypad Shield</A>	7</FONT></FONT><DD>
-		<FONT FACE="Ebrima"><FONT SIZE=1>B. <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__3133_1184491706">Zigbee/Xbee
-		Shield</A>	8</FONT></FONT><DD>
-		<FONT FACE="Ebrima"><FONT SIZE=1>C. <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__3135_1184491706">Active
-		Buzzer</A>	8</FONT></FONT><DD>
-		<FONT FACE="Ebrima"><FONT SIZE=1>D. <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__14920_1772690841">Communications</A>	9</FONT></FONT><DT>
-		<FONT FACE="Ebrima"><FONT SIZE=1>2.2 <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__3137_1184491706">Hardware
-		Assembly</A>	11</FONT></FONT><DD>
-		<FONT FACE="Ebrima"><FONT SIZE=1>A. <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__3132_1828715825">3D-Prints</A>	11</FONT></FONT><DD>
-		<FONT FACE="Ebrima"><FONT SIZE=1>B. <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__3139_1184491706">Install
-		Electronics</A>	11</FONT></FONT><DD>
-		<FONT FACE="Ebrima"><FONT SIZE=1>C. <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__3141_1184491706">Wire
-		in Battery Power</A>	12</FONT></FONT><DT>
-		<FONT FACE="Ebrima"><FONT SIZE=1>2.3 <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__14922_1772690841">Operating
-		Instructions</A>	13</FONT></FONT><DD>
-		<FONT FACE="Ebrima"><FONT SIZE=1>A. <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__9438_979114514">Introduction</A>	13</FONT></FONT><DD>
-		<FONT FACE="Ebrima"><FONT SIZE=1>B. <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__3123_1184491706">Pump
-		Control</A>	14</FONT></FONT><DD>
-		<FONT FACE="Ebrima"><FONT SIZE=1>C. <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__3125_1184491706">Alarms</A>	14</FONT></FONT><DT>
-		<FONT FACE="Ebrima"><FONT SIZE=1>3. <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__3144_1828715825">PUMP-CONTROLLER</A>	15</FONT></FONT><DT>
-		<FONT FACE="Ebrima"><FONT SIZE=1>3.1 <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__9982_955873696">Perfboard
-		Assembly</A>	15</FONT></FONT><DT>
-		<FONT FACE="Ebrima"><FONT SIZE=1>3.2 <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__9988_955873696">Hardware
-		Assembly</A>	18</FONT></FONT><DD>
-		<FONT FACE="Ebrima"><FONT SIZE=1>A. <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__9990_955873696">Print
-		Models (3D-Prints)</A>	18</FONT></FONT><DD>
-		<FONT FACE="Ebrima"><FONT SIZE=1>B. <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__10768_1184491706">Install
-		Electronics</A>	19</FONT></FONT><DT>
-		<FONT FACE="Ebrima"><FONT SIZE=1>3.3 <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__14924_1772690841">Installation
-		Instructions</A>	20</FONT></FONT><DD>
-		<FONT FACE="Ebrima"><FONT SIZE=1>3.3.1 <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__3763_1328975349">Prepare
-		for Installation</A>	20</FONT></FONT><DD>
-		<FONT FACE="Ebrima"><FONT SIZE=1>A. <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__3765_1328975349">DIN
-		Rail Components</A>	20</FONT></FONT><DD>
-		<FONT FACE="Ebrima"><FONT SIZE=1>B. <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__3767_1328975349">Pump-Controller
-		Power Cable</A>	20</FONT></FONT><DD>
-		<FONT FACE="Ebrima"><FONT SIZE=1>3.3.2 <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__9624_1828715825">Wiring
-		Power &amp; Control</A>	21</FONT></FONT><DD>
-		<FONT FACE="Ebrima"><FONT SIZE=1>A. <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__3769_1328975349">Observe
-		Pumps Electrical Panel</A>	21</FONT></FONT><DD>
+		<DT><FONT FACE="Ebrima"><FONT SIZE=1>1. <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__2026_329140064">INTRODUCTION</A>	2</FONT></FONT><DD>
+		<FONT FACE="Ebrima"><FONT SIZE=1>A. <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__10239_1565536530">Signal
+		Strength ( 2-Miles )</A>	2</FONT></FONT><DD>
+		<FONT FACE="Ebrima"><FONT SIZE=1>B. <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__10241_1565536530">Features</A>	3</FONT></FONT><DT>
+		<FONT FACE="Ebrima"><FONT SIZE=1>2. <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__10243_1565536530">INSTALLATION
+		INSTRUCTIONS</A>	3</FONT></FONT><DD>
+		<FONT FACE="Ebrima"><FONT SIZE=1>A. <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__3769_1328975349">Electrical
+		Panel Introduction</A>	4</FONT></FONT><DD>
 		<FONT FACE="Ebrima"><FONT SIZE=1>B. <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__9628_1828715825">DIN-Rail
-		Components</A>	23</FONT></FONT><DD>
+		Mounting</A>	5</FONT></FONT><DD>
 		<FONT FACE="Ebrima"><FONT SIZE=1>C. <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__9630_1828715825">Pump
-		Panel wiring</A>	23</FONT></FONT><DT>
-		<FONT FACE="Ebrima"><FONT SIZE=1>3.4 <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__14926_1772690841">Optional
-		Accessories</A>	25</FONT></FONT><DD>
-		<FONT FACE="Ebrima"><FONT SIZE=1>3.4.1 <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__3132_979114514">Power
-		Alternatives</A>	25</FONT></FONT><DD>
-		<FONT FACE="Ebrima"><FONT SIZE=1>3.4.2 <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__9634_1828715825">Pressure
-		Transducer</A>	25</FONT></FONT><DD>
-		<FONT FACE="Ebrima"><FONT SIZE=1>A. <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__4077_298041450">Materials
-		($9.59)</A>	25</FONT></FONT><DD>
-		<FONT FACE="Ebrima"><FONT SIZE=1>3.4.3 <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__9636_1828715825">Ultrasonic
-		Water Level</A>	26</FONT></FONT><DD>
-		<FONT FACE="Ebrima"><FONT SIZE=1>A. <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__4079_298041450">Materials
-		( $10.77/ea )</A>	26</FONT></FONT><DD>
-		<FONT FACE="Ebrima"><FONT SIZE=1>B. <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__4081_298041450">3D-Prints</A>	26</FONT></FONT><DD>
-		<FONT FACE="Ebrima"><FONT SIZE=1>3.4.4 <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__3771_1328975349">Auxiliary
-		Contact ( $43.75 )</A>	27</FONT></FONT><DD>
-		<FONT FACE="Ebrima"><FONT SIZE=1>3.4.5 <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__9638_1828715825">Flow
-		Meter</A>	27</FONT></FONT><DT>
-		<FONT FACE="Ebrima"><FONT SIZE=1>4. <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__14928_1772690841">SYSTEM
-		OPERATIONS</A>	28</FONT></FONT><DT>
-		<FONT FACE="Ebrima"><FONT SIZE=1>4.1 <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__3134_979114514">XBEE
-		Setup</A>	28</FONT></FONT><DT>
-		<FONT FACE="Ebrima"><FONT SIZE=1>4.2 <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__17566_1772690841">Uploading
-		Firmware</A>	28</FONT></FONT><DT>
-		<FONT FACE="Ebrima"><FONT SIZE=1>4.3 <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__14932_1772690841">Customizing
-		Firmware</A>	29</FONT></FONT><DD>
-		<FONT FACE="Ebrima"><FONT SIZE=1>4.3.1 <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__4434_298041450">Pump-Controller</A>	29</FONT></FONT><DD>
+		Panel wiring</A>	6</FONT></FONT><DD>
+		<FONT FACE="Ebrima"><FONT SIZE=1>D. <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__46025_1565536530">Pump-Controller</A>	7</FONT></FONT><DD>
+		<FONT FACE="Ebrima"><FONT SIZE=1>E. <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__46027_1565536530">Testing</A>	7</FONT></FONT><DT>
+		<FONT FACE="Ebrima"><FONT SIZE=1>3. <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__10245_1565536530">OPERATING
+		INSTRUCTIONS</A>	8</FONT></FONT><DD>
+		<FONT FACE="Ebrima"><FONT SIZE=1>A. <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__9438_979114514">Introduction</A>	8</FONT></FONT><DD>
+		<FONT FACE="Ebrima"><FONT SIZE=1>B. <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__5410_480952192">Display
+		Table</A>	9</FONT></FONT><DD>
+		<FONT FACE="Ebrima"><FONT SIZE=1>C. <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__3125_1184491706">Alarms</A>	9</FONT></FONT><DT>
+		<FONT FACE="Ebrima"><FONT SIZE=1>4. <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__10247_1565536530">BUILDING
+		INSTRUCTIONS</A>	10</FONT></FONT><DT>
+		<FONT FACE="Ebrima"><FONT SIZE=1>4.1 <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__2521_1828715825">Bill
+		Of Materials (BOM) = $233</A>	10</FONT></FONT><DD>
+		<FONT FACE="Ebrima"><FONT SIZE=1>A. <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__2523_1828715825">Pump-Panel
+		Components ( $91.50 )</A>	10</FONT></FONT><DD>
+		<FONT FACE="Ebrima"><FONT SIZE=1>B. <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__2525_1828715825">Electronic
+		Control ( $29.17 )</A>	10</FONT></FONT><DD>
+		<FONT FACE="Ebrima"><FONT SIZE=1>C. <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__2527_1828715825">RF
+		Electronics ( $91.32 )</A>	11</FONT></FONT><DD>
+		<FONT FACE="Ebrima"><FONT SIZE=1>D. <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__9434_979114514">Wire
+		&amp; Connectors ( $30.72 )</A>	11</FONT></FONT><DD>
+		<FONT FACE="Ebrima"><FONT SIZE=1>E. <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__9436_979114514">Tools
+		Required ( $NA )</A>	12</FONT></FONT><DT>
+		<FONT FACE="Ebrima"><FONT SIZE=1>4.2 <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__3128_1828715825">Hand-Remote
+		( $69.58 )</A>	13</FONT></FONT><DD>
+		<FONT FACE="Ebrima"><FONT SIZE=1>4.2.1 <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__14918_1772690841">Electronics
+		Assembly</A>	13</FONT></FONT><DD>
+		<FONT FACE="Ebrima"><FONT SIZE=1>A. <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__9602_1828715825">LCD
+		Keypad Shield</A>	14</FONT></FONT><DD>
+		<FONT FACE="Ebrima"><FONT SIZE=1>B. <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__3133_1184491706">Zigbee/Xbee
+		Shield</A>	15</FONT></FONT><DD>
+		<FONT FACE="Ebrima"><FONT SIZE=1>C. <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__3135_1184491706">Active
+		Buzzer</A>	16</FONT></FONT><DD>
+		<FONT FACE="Ebrima"><FONT SIZE=1>4.2.2 <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__3137_1184491706">Hardware
+		Assembly</A>	18</FONT></FONT><DD>
+		<FONT FACE="Ebrima"><FONT SIZE=1>A. <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__3132_1828715825">3D-Prints
+		( $2.82 )</A>	18</FONT></FONT><DD>
+		<FONT FACE="Ebrima"><FONT SIZE=1>B. <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__3139_1184491706">Install
+		Electronics</A>	18</FONT></FONT><DD>
+		<FONT FACE="Ebrima"><FONT SIZE=1>C. <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__3141_1184491706">Wire
+		in Battery Power</A>	19</FONT></FONT><DT>
+		<FONT FACE="Ebrima"><FONT SIZE=1>4.3 <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__3144_1828715825">Pump-Controller
+		( $82.05 )</A>	21</FONT></FONT><DD>
+		<FONT FACE="Ebrima"><FONT SIZE=1>4.3.1 <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__46527_2105686138">Electronics
+		Assembly</A>	21</FONT></FONT><DD>
+		<FONT FACE="Ebrima"><FONT SIZE=1>A. <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__4640_46180679">3D-Prints
+		( $0.20 )</A>	22</FONT></FONT><DD>
+		<FONT FACE="Ebrima"><FONT SIZE=1>B. <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__4642_46180679">Perfboard
+		Assembly</A>	22</FONT></FONT><DD>
+		<FONT FACE="Ebrima"><FONT SIZE=1>4.3.2 <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__9988_955873696">Hardware
+		Assembly</A>	25</FONT></FONT><DD>
+		<FONT FACE="Ebrima"><FONT SIZE=1>A. <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__9990_955873696">3D-Prints
+		( $3.87 )</A>	25</FONT></FONT><DD>
+		<FONT FACE="Ebrima"><FONT SIZE=1>B. <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__10768_1184491706">Install
+		Electronics</A>	26</FONT></FONT><DD>
+		<FONT FACE="Ebrima"><FONT SIZE=1>C. <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__5412_480952192">Install
+		Cable</A>	27</FONT></FONT><DT>
+		<FONT FACE="Ebrima"><FONT SIZE=1>4.4 <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__14924_1772690841">Installation-Kit
+		( $98.07 )</A>	29</FONT></FONT><DD>
+		<FONT FACE="Ebrima"><FONT SIZE=1>A. <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__3765_1328975349">DIN
+		Rail &amp; Components</A>	29</FONT></FONT><DD>
+		<FONT FACE="Ebrima"><FONT SIZE=1>B. <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__3767_1328975349">Pump-Panel
+		Exit Cable</A>	29</FONT></FONT><DD>
+		<FONT FACE="Ebrima"><FONT SIZE=1>C. <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__5621_1844439616">Miscellaneous
+		Items</A>	29</FONT></FONT><DT>
+		<FONT FACE="Ebrima"><FONT SIZE=1>5. <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__14928_1772690841">SYSTEM
+		SETUP</A>	30</FONT></FONT><DT>
+		<FONT FACE="Ebrima"><FONT SIZE=1>5.1 <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__5414_480952192">Adding
+		Expansions</A>	30</FONT></FONT><DT>
+		<FONT FACE="Ebrima"><FONT SIZE=1>5.2 <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__17566_1772690841">Uploading
+		Firmware</A>	30</FONT></FONT><DT>
+		<FONT FACE="Ebrima"><FONT SIZE=1>5.3 <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__5416_480952192">Xbee
+		RF Configuration</A>	31</FONT></FONT><DT>
+		<FONT FACE="Ebrima"><FONT SIZE=1>5.4 <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__14932_1772690841">Customizing
+		Firmware</A>	31</FONT></FONT><DD>
+		<FONT FACE="Ebrima"><FONT SIZE=1>5.4.1 <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__4434_298041450">Pump-Controller</A>	32</FONT></FONT><DD>
 		<FONT FACE="Ebrima"><FONT SIZE=1>A. <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__4436_298041450">Virtual
-		Pins</A>	29</FONT></FONT><DD>
-		<FONT FACE="Ebrima"><FONT SIZE=1>4.3.2 <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__4438_298041450">Hand-Remote</A>	29</FONT></FONT><DD>
-		<FONT FACE="Ebrima"><FONT SIZE=1>A. <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__14521_298041450">Creating
-		a Menu-Item</A>	30</FONT></FONT><DD>
-		<FONT FACE="Ebrima"><FONT SIZE=1>B. <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__14995_298041450">Deleting
-		a Menu-Item</A>	31</FONT></FONT><DD>
-		<FONT FACE="Ebrima"><FONT SIZE=1>C. <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__14997_298041450">Updating
-		Changes</A>	31</FONT></FONT><DD>
+		Pins</A>	32</FONT></FONT><DD>
+		<FONT FACE="Ebrima"><FONT SIZE=1>5.4.2 <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__4438_298041450">Hand-Remote</A>	32</FONT></FONT><DD>
+		<FONT FACE="Ebrima"><FONT SIZE=1>A. <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__10251_1565536530">Adding
+		&amp; Deleting Devices</A>	32</FONT></FONT><DD>
+		<FONT FACE="Ebrima"><FONT SIZE=1>B. <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__14521_298041450">Creating
+		a Menu-Item</A>	33</FONT></FONT><DD>
+		<FONT FACE="Ebrima"><FONT SIZE=1>C. <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__14995_298041450">Deleting
+		a Menu-Item</A>	33</FONT></FONT><DD>
 		<FONT FACE="Ebrima"><FONT SIZE=1>D. <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__14525_298041450">Menu-Item
-		Setup ( Example )</A>	31</FONT></FONT><DT>
-		<FONT FACE="Ebrima"><FONT SIZE=1>5. <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__4083_298041450">OTHER
-		RESOURCES / LINKS</A>	32</FONT></FONT></DL>
+		Setup ( Example )</A>	33</FONT></FONT><DT>
+		<FONT FACE="Ebrima"><FONT SIZE=1>6. <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__4644_46180679">OPTIONAL
+		ACCESSORIES</A>	36</FONT></FONT><DT>
+		<FONT FACE="Ebrima"><FONT SIZE=1>6.1 <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__3132_979114514">Hand-Remote</A>	36</FONT></FONT><DD>
+		<FONT FACE="Ebrima"><FONT SIZE=1>6.1.1 <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__4646_46180679">9V
+		Rechargeable Batteries ( $18.90 )</A>	36</FONT></FONT><DT>
+		<FONT FACE="Ebrima"><FONT SIZE=1>6.2 <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__4648_46180679">Pump-Controller</A>	36</FONT></FONT><DD>
+		<FONT FACE="Ebrima"><FONT SIZE=1>6.2.1 <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__9634_1828715825">Pressure</A>	36</FONT></FONT><DD>
+		<FONT FACE="Ebrima"><FONT SIZE=1>A. <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__4077_298041450">Materials
+		($9.59)</A>	36</FONT></FONT><DD>
+		<FONT FACE="Ebrima"><FONT SIZE=1>B. <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__4652_46180679">Installation</A>	36</FONT></FONT><DD>
+		<FONT FACE="Ebrima"><FONT SIZE=1>C. <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__4654_46180679">Firmware
+		Adjustments</A>	37</FONT></FONT><DD>
+		<FONT FACE="Ebrima"><FONT SIZE=1>6.2.2 <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__9636_1828715825">Water
+		Level</A>	37</FONT></FONT><DD>
+		<FONT FACE="Ebrima"><FONT SIZE=1>A. <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__4079_298041450">Materials
+		( $10.77/ea )</A>	37</FONT></FONT><DD>
+		<FONT FACE="Ebrima"><FONT SIZE=1>B. <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__4081_298041450">3D-Prints
+		( $1.30 )</A>	37</FONT></FONT><DD>
+		<FONT FACE="Ebrima"><FONT SIZE=1>C. <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__4656_46180679">Firmware
+		Adjustments</A>	38</FONT></FONT><DD>
+		<FONT FACE="Ebrima"><FONT SIZE=1>6.2.3 <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__3771_1328975349">Auxiliary
+		Contact ( $43.75 )</A>	38</FONT></FONT><DD>
+		<FONT FACE="Ebrima"><FONT SIZE=1>6.2.4 <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__9638_1828715825">Flow
+		Meter</A>	38</FONT></FONT><DT>
+		<FONT FACE="Ebrima"><FONT SIZE=1>7. <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__4083_298041450">TROUBLESHOOTING</A>	38</FONT></FONT><DT>
+		<FONT FACE="Ebrima"><FONT SIZE=1>8. <A target="mainframe" HREF="content/AgIrrigationPumpRemoteControl.html#__RefHeading__28684_1924883724">OTHER
+		RESOURCES / LINKS</A>	39</FONT></FONT></DL>
 </DIV>
 <br>
 </p>

@@ -78,23 +78,23 @@ body {
 	font-style: normal;
 	font-weight: bold;
 	color: #000000;
-	background-color: #99CCCC;
+	background-color: #EEEEEE;
 }
 .tcolor {
-	background-color: #DDDDDD;
+	background-color: #00CCFF;
 }
 .ccolor {
-	background-color: #99CCFF;
+	background-color: #CCCCCC;
 }
 a:link {
 	font-family: "Times New Roman", Times, serif;
-	color: #003399;
+	color: #0033CC;
 }
 a:visited {
 	font-family: "Times New Roman", Times, serif;
-	color: #0066CC;
+	color: #0066FF;
 }
 a:active {
 	font-family: "Times New Roman", Times, serif;
-	color: #FF9900;
+	color: #FF0000;
 }
