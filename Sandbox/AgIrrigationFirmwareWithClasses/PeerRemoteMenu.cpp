@@ -10,16 +10,12 @@
 **********************************************************************************************************************/
 #include "PeerRemoteMenu.h"
 
-//---[ PROGRAM BEHAVIOR ]----------------------------------------------------------------------------------------------
-#define START_STATUS_ITERATE  30000     // Start iterating Menu-Items after idle for (ms)
-#define ITERATE_EVERY         5000      // Iterate Menu-Items every (ms); when idle
-#if XBEECONFIG>0
-#define NONBLOCKING           0         // Digi-Xbee-XCTU configuration software has problems with active interupts
-#else
-#define NONBLOCKING           1         // Blocking mode (0) stalls screen till item is gotten, (1) releases screen
+#if XBEECONFIG>0                        // XBEECONFIG defined in PeerRemoteMenu.h
+  #undef BLOCKING                       // Undefine any previously defined BLOCKING
+  #define BLOCKING 1                    // Digi-Xbee-XCTU configuration software has problems with active interupts
 #endif
-#define DEBUG                 0         // Set this to 1 for Serial DEBUGGING messages ( Firmware development use only )
-#if DEBUG>0                             // Activate Debug Messages
+
+#if DEBUG>0                             // Activate Debug Messages ( DEBUG defined in PeerRemoteMenu.h )
   #define DBL(x) Serial.println x
   #define DB(x) Serial.print x
   #define DBC Serial.print(", ")
@@ -29,28 +25,55 @@
   #define DBC  
 #endif
 
-//---[ Globals ]-------------------------------------------------------------------------------------------------------
-char *Devices[16];                                        // Store a common name for each Transceiver Device
-volatile unsigned long last_bpress_millis = 0;              // Track last button press time
-Button last_bpress = NONE;                                  // Store last button press for processing
-Button prev_bpress = NONE;                                  // Used to count ButtonHeld counter
-unsigned long wait_reply = 0;                               // Track non-blocking reply time
-unsigned long last_iter_millis = 0;                         // Track last status iteration time
+//=====================================================================================================================
+//------------------------------ STATIC FUNCTIONS ---------------------------------------------------------------------
+//=====================================================================================================================
+/******************************************************************************************************************//**
+ * @brief  Receives button press ( adc_value ), decodes it, and saves it to be processed by loop()
+ * @remarks
+ * - This function must be static because it is called by an ISR() routine
+ * - Button_Debounce_ms defined in 'PeerRemoteMenu.h' only allows a button press to register every ? milliseconds.
+ * @code
+ *   ButtonCheck(analogRead(0));
+ * @endcode
+**********************************************************************************************************************/
+static void PeerRemoteMenu::ButtonCheck(int adc_value) {
+  DB(("ButtonCheck("));DB((adc_value));DBL((")"));
+  
+  unsigned long clk = millis();
+  if ( clk - last_bpress_millis < Button_Debounce_ms ) return;         // Debounce button presses
 
-int Func = 0;                                             // Track current menu value item
-int ButtonHeld = 0;                                         // Increment values by 10 when button is held
-bool AlarmActive = false;                                   // Track if an Active Alarm is present
-bool bIterating = false;                                    // Alarm only active while iterating the menu
-int PacketID = -1;                                          // For non-blocking communications
+  if (adc_value > 1000) { last_bpress = NONE; }
+  else if (adc_value < 50) { last_bpress = RIGHT; }
+  else if (adc_value < 195) { last_bpress = UP; }
+  else if (adc_value < 380) { last_bpress = DOWN; }
+  else if (adc_value < 555) { last_bpress = LEFT; }
+  else if (adc_value < 790) { last_bpress = SELECT; }
 
-//---[ Menu-Item Structure and Constants ]-----------------------------------------------------------------------------
-MenuItem *RootItem;
-MenuItem *CurrItem;                
+  if ( prev_bpress == last_bpress ) { ButtonHeld++; } else { ButtonHeld=0; }
+  prev_bpress = last_bpress;
+  if ( last_bpress != NONE ) {
+    DBL(("Button Pressed"));
+    last_bpress_millis = millis();
+  }
+}
 
+#if BLOCKING==0
+/******************************************************************************************************************//**
+ * @brief  ISR ( Interrupt Service Routine ) for Keypad Up, Down, and Right arrow buttons.
+ * @remarks
+ * - PCINT1_vect Pin Change Interrupt will not trigger on Left or Select buttons ( digital threshold? )
+ * - The interrupt stores the button pressed by calling ButtonCheck() and processes it when the loop() is called.
+ * - The original SoftwareSerial Library calls ALL Interrupts so a modified 'SSoftwareSerial' must be used to compile
+**********************************************************************************************************************/
+ISR(PCINT1_vect) {
+  PeerRemoteMenu::ButtonCheck(analogRead(0));
+}
+#endif
 
 //=====================================================================================================================
-//------------------------------ MENU STRUCTURE ( ADVANCED CONFIGURATION ) --------------------------------------------
-//=====================================================================================================================
+//------------------------------ MENU ITEM METHODS --------------------------------------------------------------------
+//=====================================================================================================================               
 /******************************************************************************************************************//**
  * @brief  Setup the LCD menu
  * @remarks
@@ -59,12 +82,53 @@ MenuItem *CurrItem;
  * @code
  *   exmaple code
  * @endcode
-**********************************************************************************************************************/                 
+**********************************************************************************************************************/
+MenuItem::MenuItem() {
+  
+}
+
+void MenuItem::AttachSet(uint8_t _DriveDevice = 0, uint8_t _DrivePin = NOPIN, uint8_t _ValueStorePin = NOPIN, PID *_SetPID = NULL ) {
+  if ( Set != NULL ) delete Set;
+  Set = new uSet;
+  if ( _DriveDevice == READ_DEVICE_AND_PIN ) {
+    Set->DriveDevice = Device;
+    Set->DrivePin = Pin;
+  } else {
+    Set->DriveDevice = _DriveDevice;
+    Set->DrivePin = _DrivePin;
+    Set->SetPID = _SetPID;
+  }
+  Set->ValueStorePin = _ValueStorePin;
+}
+
+void MenuItem::AttachAlarm(char _ID, eCompare _Compare, uint8_t _StorePin = NOPIN, uint8_t _DriveDevice = 0, uint8_t _DrivePin = 0, int _DriveValue = 0) {
+  uAlarm *thisAlarm = NULL;
+  if ( FirstAlarm == NULL ) {
+    FirstAlarm = new uAlarm;
+    thisAlarm = FirstAlarm;
+  } else {
+    thisAlarm = FirstAlarm;
+    while ( thisAlarm->Next != NULL ) { thisAlarm = thisAlarm->Next; }
+    thisAlarm->Next = new uAlarm;
+    thisAlarm->Next->Prev = thisAlarm;
+    thisAlarm = thisAlarm->Next;
+  }
+  thisAlarm->ID = _ID;
+  thisAlarm->Compare = _Compare;
+  thisAlarm->StorePin = _StorePin;
+  thisAlarm->DriveDevice = _DriveDevice;
+  thisAlarm->DrivePin = _DrivePin;
+  thisAlarm->DriveValue = _DriveValue;
+}
+
+//=====================================================================================================================
+//------------------------------ PEER-REMOTE-MENU METHODS -------------------------------------------------------------
+//=====================================================================================================================
 PeerRemoteMenu::PeerRemoteMenu(PeerIOSerialControl *_XBee, LiquidCrystal *_LCD, uint8_t _BuzzerPin = 0  ) {
   LCD = _LCD;
   XBee = _XBee;
   BuzzerPin = _BuzzerPin;
-#if NONBLOCKING>0
+#if BLOCKING==1
   noInterrupts();               // switch interrupts off while messing with their settings  
   PCICR =0x02;                  // Enable 'PCIE1' bit of PCICR Pin Change Interrupt the PCINT1 interrupt
   PCMSK1 = 0b00000001;          // Pin Change Interrupt Mask ( NA, RESET, A5, A4, A3, A2, A1, A0 ) - Activate A0              
@@ -72,113 +136,29 @@ PeerRemoteMenu::PeerRemoteMenu(PeerIOSerialControl *_XBee, LiquidCrystal *_LCD, 
 #endif
 }
 
-MenuItem *PeerRemoteMenu::AddMenuItem( char *_Text, uint8_t _Device, uint8_t _Pin, eValModifier _Modifier, eSetType _SetType, uint8_t SetStorePin = NOPIN ) {
-  if ( RootItem == NULL ) {
-    RootItem = new MenuItem;
-    RootItem->Next = RootItem;              // Set Next Item to this Item
-    RootItem->Prev = RootItem;              // Set Prev Item to this Item
-    RootItem->Text = _Text;
-    RootItem->Device = _Device;
-    RootItem->Pin = _Pin;
-    RootItem->ValueModifier = _Modifier;
-    RootItem->SetType = _SetType;
-    RootItem->Next = RootItem;
-    RootItem->Prev = RootItem;
-    CurrItem = RootItem;
-    return CurrItem;
+MenuItem *PeerRemoteMenu::AddMenuItem( char *_Text, uint8_t _Device, uint8_t _Pin, bool _IsOnOff ) {
+  MenuItem *thisItem = NULL;
+  if ( FirstItem == NULL ) {
+    FirstItem = new MenuItem;
+    thisItem = FirstItem;
   } else {
-    CurrItem->Next = new MenuItem;                            // Create new Item
-    CurrItem->Next->Prev = CurrItem;                          // The new Items Prev pointer will be the Current item
-    CurrItem->Next->Next = RootItem;                          // The new Items Next pointer will circle around to the RootItem
-    CurrItem->Next->EpromOffset = CurrItem->EpromOffset + 7;  // New Items EpromOffset will be 7-bytes more than Current Item
-    CurrItem = CurrItem->Next;                                // Now; Update to make the new Item the Current Item
-    CurrItem->Text = _Text;
-    CurrItem->Device = _Device;
-    CurrItem->Pin = _Pin;
-    CurrItem->ValueModifier = _Modifier;
-    CurrItem->SetType = _SetType;;
-    return CurrItem;
+    thisItem = FirstItem;
+    while ( thisItem->Next != NULL ) { thisItem = thisItem->Next; }
+    thisItem->Next = new MenuItem;
+    thisItem->Next->Prev = thisItem;
+    thisItem->Next->EpromOffset = thisItem->EpromOffset + 7;
+    thisItem = thisItem->Next;
   }
-}
-
-void PeerRemoteMenu::AddLoAlarm( MenuItem *Item, char _ID, eCompare _Compare, uint8_t _DriveDevice, uint8_t _DrivePin, unsigned int _DriveValue, uint8_t ValueStorePin = NOPIN ) {
-  Item->LoAlarm = new uAlarm;
-  Item->LoAlarm->ID = _ID;
-  Item->LoAlarm->Compare = _Compare;
-  Item->LoAlarm->DriveDevice = _DriveDevice;
-  Item->LoAlarm->DrivePin = _DrivePin;
-  Item->LoAlarm->DriveValue = _DriveValue;
-}
-
-void PeerRemoteMenu::AddHiAlarm( MenuItem *Item, char _ID, eCompare _Compare, uint8_t _DriveDevice, uint8_t _DrivePin, unsigned int _DriveValue, uint8_t ValueStorePin = NOPIN ) {
-  Item->HiAlarm = new uAlarm;
-  Item->HiAlarm->ID = _ID;
-  Item->HiAlarm->Compare = _Compare;
-  Item->HiAlarm->DriveDevice = _DriveDevice;
-  Item->HiAlarm->DrivePin = _DrivePin;
-  Item->HiAlarm->DriveValue = _DriveValue;
-}
-
-void PeerRemoteMenu::AddPIDController( MenuItem *Item, uint8_t _DriveDevice, uint8_t _DrivePin, double _Kp, double _Ki, double _Kd, int _POn) {
-  Item->PIDController = new uPIDController;
-  Item->PIDController->DriveDevice = _DriveDevice;
-  Item->PIDController->DrivePin = _DrivePin;
-  Item->PIDController->Kp = _Kp;
-  Item->PIDController->Ki = _Ki;
-  Item->PIDController->Kd = _Kd;
-  Item->PIDController->POn = _POn;
+  thisItem->Text = _Text;
+  thisItem->Device = _Device;
+  thisItem->Pin = _Pin;
+  thisItem->IsOnOff = _IsOnOff;
+  return thisItem;
 }
 
 void PeerRemoteMenu::SetStartingItem ( MenuItem *Item ) {
   CurrItem = Item;
-}
-void PeerRemoteMenu::NextFunc() {
-  if ( Func == MAIN ) {
-    if ( CurrItem->SetType == SETTABLE ) {
-      Func = SET;
-    } else if ( CurrItem->LoAlarm != NULL ) {
-      Func = LOALARM;
-    } else if ( CurrItem->HiAlarm != NULL ) {
-      Func = HIALARM;
-    }
-  } else if ( Func == SET ) {
-    if ( CurrItem->LoAlarm != NULL ) {
-      Func = LOALARM;
-    } else if ( CurrItem->HiAlarm != NULL ) {
-      Func = HIALARM;
-    }
-  } else if ( Func == LOALARM ) {
-    if ( CurrItem->HiAlarm != NULL ) Func = HIALARM;
-  }
-}
-void PeerRemoteMenu::PrevFunc() {
-  if ( Func == HIALARM ) {
-    if ( CurrItem->LoAlarm != NULL ) {
-      Func = LOALARM;
-    } else if ( CurrItem->SetType == SETTABLE ) {
-      Func = SET;
-    } else {
-      Func = MAIN;
-    }
-  } else if ( Func == LOALARM ) {
-    if ( CurrItem->SetType == SETTABLE ) {
-      Func = SET;
-    } else {
-      Func = MAIN;
-    }
-  } else {
-    Func = MAIN;
-  }
-}
-
-void PeerRemoteMenu::NextItem() {
-  Func = MAIN;
-  CurrItem = CurrItem->Next;
-}
-
-void PeerRemoteMenu::PrevItem() {
-  Func = MAIN;
-  CurrItem = CurrItem->Prev;
+  LCD_display();
 }
 
 void PeerRemoteMenu::AddDeviceName ( uint8_t _Device, char *_Name ) {
@@ -335,7 +315,7 @@ void PeerRemoteMenu::GetItem(int i = -1) {
     CheckAlarms(i);                             // Check the value for Alarms
   } else {                                                                        // Remote Pin Read; Set TransceiverID
     if ( CurrItem->Device != XBee->TargetArduinoID() ) XBee->TargetArduinoID( CurrItem->Device );
-#if NONBLOCKING>0
+#if BLOCKING==1
     if ( CurrItem->Pin >= A0 ) {
         wait_reply = millis();
         PacketID = XBee->analogReadNB(CurrItem->Pin);
@@ -414,10 +394,10 @@ void PeerRemoteMenu::SetItem(int i = -1) {
     GetItem(i);                                                           // Select will Refresh item
 
   } else if ( Func == SET ) {                                           // ----------- SET --------------------
-    iSetValue = CurrItem->SetValue;                                   // Record the current Set Value
+    iSetValue = CurrItem->Set->Value;                                   // Record the current Set Value
     if ( CurrItem->LastOptionIdx > 0 ) {                                                // IF [SET] value is an OPTION
-      if (CurrItem->SetValue < 0 || CurrItem->SetValue > MAXOPTIONS) return;  // Boundary Check the OPTION
-      iSetValue = CurrItem->Option[CurrItem->SetValue].Value;                       // Record the OPTIONS [SET] Value
+      if (CurrItem->Set->Value < 0 || CurrItem->Set->Value > MAXOPTIONS) return;  // Boundary Check the OPTION
+      iSetValue = CurrItem->Option[CurrItem->Set->Value].Value;                       // Record the OPTIONS [SET] Value
     }
     
     if ( CurrItem->Pin != NOPIN ) {                                         // ----- HARDWARE SET ------------------
@@ -448,24 +428,25 @@ void PeerRemoteMenu::SetItem(int i = -1) {
  * @endcode
 **********************************************************************************************************************/
 void PeerRemoteMenu::LCD_display() {
+  DBL(("LCD_display()"));
 
-  // Top Row (Selected Pump)
+  // Top Row (Display Device)
   LCD->clear();LCD->setCursor(0,0);
   LCD->print( Devices[CurrItem->Device] );
   
   // Right Side Alarm Identifiers
-  int pos = 15;
-  MenuItem *CheckItem = RootItem;
+  /*int pos = 15;
+  MenuItem *CheckItem = FirstItem;
   do {
-    if ( CheckItem->LoAlarm != NULL ) { 
-      if ( CheckItem->LoAlarm->IsOn ) { LCD->setCursor(pos,0);LCD->print(CurrItem->LoAlarm->ID);pos--; }
-    }
-    if ( CheckItem->HiAlarm != NULL ) { 
-      if ( CheckItem->HiAlarm->IsOn ) { LCD->setCursor(pos,0);LCD->print(CurrItem->HiAlarm->ID);pos--; }
+    if ( CheckItem->FirstAlarm != NULL ) {
+      uAlarm *alarm = CheckItem->FirstAlarm;
+      do {
+        if ( alarm->IsOn ) { LCD->setCursor(pos,0);LCD->print(alarm->ID);pos--; }
+      } while ( alarm != CheckItem->LastAlarm );
     }
     CheckItem = CheckItem->Next;    
-  } while ( CheckItem != RootItem );
-        
+  } while ( CheckItem != FirstItem );
+    */    
   // Bottom Row ( Menu Item Text ) and Function
   LCD->setCursor(0,1);LCD->print(CurrItem->Text);
   LCD->setCursor(strlen(CurrItem->Text), 1);
@@ -479,91 +460,45 @@ void PeerRemoteMenu::LCD_display() {
     LCD->print((char)126); //Character '->'
     LCD->setCursor( strlen(CurrItem->Text) + 5, 1);
   
-  } else {
-    eCompare CheckCompare = EMPTY;
-    if ( Func == LOALARM ) {
-      CheckCompare = CurrItem->LoAlarm->Compare;
-    } else if ( Func == HIALARM ) {
-      CheckCompare = CurrItem->HiAlarm->Compare;
-    }
-    switch ( CheckCompare ) {
-      case LESS:    LCD->print("<!"); break;
-      case GREATER: LCD->print(">!"); break;
-      case EQUAL:   LCD->print("=!"); break;
-      case NOTEQUAL:LCD->print((char)183);LCD->print("!");break; // slashed equal
+  } else if ( Func == ALARM ) {
+    switch ( CurrItem->CurrAlarm->Compare ) {
+      case LESS:      LCD->print("<!"); break;
+      case GREATER:   LCD->print(">!"); break;
+      case EQUAL:     LCD->print("=!"); break;
+      case NOTEQUAL:  LCD->print((char)183);LCD->print("!");break; // slashed equal
+      case EMPTY:     LCD->print("E");break;
+      default: LCD->print("!!");
     }
     LCD->setCursor( strlen(CurrItem->Text) + 3, 1);
   }
   
   // Bottom Row ( Display Value )
   if ( Func == MAIN && CurrItem->ValueValid != true ) {
-#if NONBLOCKING>0
+#if BLOCKING==0
     if ( PacketID != -1 ) { LCD->print("?"); } else { LCD->print("ERR"); }
 #else
     LCD->print("ERR");
 #endif
   } else {
-    if ( CurrItem->ValueModifier == ONOFF ) {
+    if ( CurrItem->IsOnOff ) {
       if ( Func == MAIN ) {
         if ( CurrItem->Value != LOW ) { LCD->print("On"); } else { LCD->print("Off"); }
       } else if ( Func == SET ) {
-        if ( CurrItem->SetValue != LOW ) { LCD->print("On"); } else { LCD->print("Off"); }
-      } else if ( Func == LOALARM ) {
-        if ( CurrItem->LoAlarm->Value != LOW ) { LCD->print("On"); } else { LCD->print("Off"); }
-      } else if ( Func == HIALARM ) {
-        if ( CurrItem->HiAlarm->Value != LOW ) { LCD->print("On"); } else { LCD->print("Off"); }
+        if ( CurrItem->Set->Value != LOW ) { LCD->print("On"); } else { LCD->print("Off"); }
+      } else if ( Func == ALARM ) {
+        if ( CurrItem->CurrAlarm->Value != LOW ) { LCD->print("On"); } else { LCD->print("Off"); }
       }
     } else {
       if ( Func == MAIN ) {
         LCD->print( CurrItem->Value );
       } else if ( Func == SET ) {
-        LCD->print( CurrItem->SetValue );
-      } else if ( Func == LOALARM ) {
-        LCD->print( CurrItem->LoAlarm->Value );
-      } else if ( Func == HIALARM ) {
-        LCD->print( CurrItem->HiAlarm->Value );
+        LCD->print( CurrItem->Set->Value );
+      } else if ( Func == ALARM ) {
+        LCD->print( CurrItem->CurrAlarm->Value );
       }
     }
   }
 }
-
-/******************************************************************************************************************//**
- * @brief  Checks and Debounces button presses on the LCD Keypad
- * @remarks
- * - This function is called automatically over-and-over by Arduino
- * - Line 'if ( clk - last_bpress_millis < 500 )' only allows a new button press to register every 500ms.
- * @code
- *   ButtonCheck(analogRead(0));
- * @endcode
-**********************************************************************************************************************/
-void PeerRemoteMenu::ButtonCheck(int adc_value) {
-  unsigned long clk = millis();
-  if ( clk - last_bpress_millis < 200 ) return;         // Debounce button presses
-
-  if (adc_value > 1000) { last_bpress = NONE; }
-  else if (adc_value < 50) { last_bpress = RIGHT; }
-  else if (adc_value < 195) { last_bpress = UP; }
-  else if (adc_value < 380) { last_bpress = DOWN; }
-  else if (adc_value < 555) { last_bpress = LEFT; }
-  else if (adc_value < 790) { last_bpress = SELECT; }
-
-  if ( prev_bpress == last_bpress ) { ButtonHeld++; } else { ButtonHeld=0; }
-  prev_bpress = last_bpress;
-  if ( last_bpress != NONE ) last_bpress_millis = millis();
-}
-
-#if NONBLOCKING>0
-/******************************************************************************************************************//**
- * @brief  ISR ( Interrupt Service Routine ) for Keypad Up, Down, and Right arrow buttons.
- * @remarks
- * - PCINT1_vect Pin Change Interrupt will not trigger on Left or Select buttons ( digital threshold? )
- * - The interrupt stores the button pressed by calling ButtonCheck() and processes it when the loop() is called.
- * - The original SoftwareSerial Library calls ALL Interrupts so a modified 'SSoftwareSerial' must be used to compile
-**********************************************************************************************************************/
-ISR(PCINT1_vect) {
-  PeerRemoteMenu::ButtonCheck(analogRead(0));
-}
-#endif
 
 /******************************************************************************************************************//**
  * @brief  Arduino Sketch Loop() routine
@@ -574,10 +509,11 @@ ISR(PCINT1_vect) {
  * - Handles Menu iteratation during idle.
 **********************************************************************************************************************/
 void PeerRemoteMenu::loop(){
+  //DBL(("loop()"));
 
   XBee->Available();                                             // Check communications 
   
-  #if NONBLOCKING>0                                             // Check for Non-Blocked Replies
+  #if BLOCKING==0                                             // Check for Non-Blocked Replies
     if ( PacketID != -1 ) {                                     // Assign Non-Blocking Get Items
       int Ret = XBee->GetReply(PacketID);
       if ( Ret != -1 ) {                                        // -- If reply value was available
@@ -603,12 +539,12 @@ void PeerRemoteMenu::loop(){
     if ( clk - last_bpress_millis > START_STATUS_ITERATE) bIterating = true;
     if ( bIterating && (( clk - last_iter_millis ) > ITERATE_EVERY) && !AlarmActive ) {
           Func = MAIN;                                        // Switch to 'MAIN' menu items
-          MenuItem *CurrItem = CurrItem;                        // Mark current idx
+          MenuItem *CurrentItem = CurrItem;                     // Mark the current item
           MenuItem *Item;
           do {                                                  // Find the next menu item with an Alarm
-            Item = CurrItem->Next;
-            if ( Item->LoAlarm != NULL || Item->HiAlarm != NULL ) break;
-          } while ( Item != CurrItem );
+            Item = CurrItem->Next;                              // Get Next MenuItem
+            if ( Item->FirstAlarm != NULL ) break;              // Check if it has any alarms
+          } while ( Item != CurrentItem );                      // Stop checking on full rotation
           
           PacketID = -1;                                    // Clear the previous PacketID; We're moving
           //GetItem();                                        // Get the new value
@@ -621,68 +557,90 @@ void PeerRemoteMenu::loop(){
   //--- Process Button Press ------------------------------------------------------------------------
   } else {
     PacketID = -1;                                          // Clear Non-Blocked Packets
-    noTone(BuzzerPin);AlarmActive = false;                      // Turn off any alarms at button press
+    noTone(BuzzerPin);AlarmActive = false;                  // Turn off any alarms at button press
     bIterating = false;                                     // Stop Iterating Menu Items
     
     //------- ( SELECT ) -------
     if (bpress == SELECT) {
-      //SetItem();                                            // SET the Menu Item to its new value
-      Func = MAIN;                                        // Return to the MAIN items once a SET is done
+      //SetItem();                                          // SET the Menu Item to its new value
+      Func = MAIN;                                          // Return to the MAIN items once a SET is done
       //GetItem();                                            // Get the Items Value
     
     //------- (   UP   ) -------
     } else if (bpress == UP ) {
       
       if ( Func == MAIN ) {
-        CurrItem = CurrItem->Prev;
-
-      } else if ( CurrItem->ValueModifier == ONOFF ) {
-        if ( Func == SET ) {
-          if ( CurrItem->SetValue == LOW ) { CurrItem->SetValue = HIGH; } else { CurrItem->SetValue = LOW; }
-        } else if ( Func == LOALARM ) {
-          if ( CurrItem->LoAlarm->Value = LOW ) { CurrItem->LoAlarm->Value = HIGH; } else { CurrItem->LoAlarm->Value = LOW; }
-        } else if ( Func == HIALARM ) {
-          if ( CurrItem->HiAlarm->Value = LOW ) { CurrItem->HiAlarm->Value = HIGH; } else { CurrItem->HiAlarm->Value = LOW; }
+        if ( CurrItem->Prev == NULL ) {
+          if ( CurrItem->Next != NULL ) {
+            while ( CurrItem->Next != NULL ) { CurrItem = CurrItem->Next; } // Find Last entry
+          }
+        } else {
+          CurrItem = CurrItem->Prev;
         }
+        
+      } else if ( CurrItem->IsOnOff ) {
+        if ( Func == SET ) {
+          if ( CurrItem->Set->Value == LOW ) { CurrItem->Set->Value = HIGH; } else { CurrItem->Set->Value = LOW; }
+        } else if ( Func == ALARM ) {
+          if ( CurrItem->CurrAlarm->Value = LOW ) { CurrItem->CurrAlarm->Value = HIGH; } else { CurrItem->CurrAlarm->Value = LOW; }
+        }
+        
       } else {
         if ( Func == SET ) {
-          CurrItem->SetValue++;
-        } else if ( Func == LOALARM ) {
-          CurrItem->LoAlarm->Value++;
-        } else if ( Func == HIALARM ) {
-          CurrItem->HiAlarm->Value++;
+          CurrItem->Set->Value++;
+        } else if ( Func == ALARM ) {
+          CurrItem->CurrAlarm->Value++;
         }
       }
 
     //------- (  DOWN  ) -------
     } else if (bpress == DOWN) {                                          
       
-      if ( Func == MAIN ) { 
-        CurrItem = CurrItem->Next;
-      
-      } else if ( CurrItem->ValueModifier == ONOFF ) {
+      if ( Func == MAIN ) {
+        if ( CurrItem->Next != NULL ) { CurrItem = CurrItem->Next; } else { CurrItem = FirstItem; }
+        
+      } else if ( CurrItem->IsOnOff ) {
         if ( Func == SET ) {
-          if ( CurrItem->SetValue == LOW ) { CurrItem->SetValue = HIGH; } else { CurrItem->SetValue = LOW; }
-        } else if ( Func == LOALARM ) {
-          if ( CurrItem->LoAlarm->Value = LOW ) { CurrItem->LoAlarm->Value = HIGH; } else { CurrItem->LoAlarm->Value = LOW; }
-        } else if ( Func == HIALARM ) {
-          if ( CurrItem->HiAlarm->Value = LOW ) { CurrItem->HiAlarm->Value = HIGH; } else { CurrItem->HiAlarm->Value = LOW; }
+          if ( CurrItem->Set->Value == LOW ) { CurrItem->Set->Value = HIGH; } else { CurrItem->Set->Value = LOW; }
+        } else if ( Func == ALARM ) {
+          if ( CurrItem->CurrAlarm->Value = LOW ) { CurrItem->CurrAlarm->Value = HIGH; } else { CurrItem->CurrAlarm->Value = LOW; }
         }
       } else {
         if ( Func == SET ) {
-          CurrItem->SetValue--;
-        } else if ( Func == LOALARM ) {
-          CurrItem->LoAlarm->Value--;
-        } else if ( Func == HIALARM ) {
-          CurrItem->HiAlarm->Value--;
+          CurrItem->Set->Value--;
+        } else if ( Func == ALARM ) {
+          CurrItem->CurrAlarm->Value--;
         }
       }
     
     
-    } else if (bpress == RIGHT) {       //------- (  RIGHT ) -------
-      NextFunc();
-    } else if (bpress == LEFT) {        //------- (  LEFT  ) -------  
-      PrevFunc();
+    } else if (bpress == RIGHT) {                                             // Set the Function to the Next Function
+      if ( Func == MAIN ) {
+        if ( CurrItem->Set != NULL ) {
+          Func = SET;
+        } else if ( CurrItem->FirstAlarm != NULL ) {
+          Func = ALARM;
+          CurrItem->CurrAlarm = CurrItem->FirstAlarm;
+        }
+      } else if ( Func == SET ) {
+        if ( CurrItem->FirstAlarm != NULL ) {
+          Func = ALARM;
+          CurrItem->CurrAlarm = CurrItem->FirstAlarm;
+        }
+      } else if ( Func == ALARM ) {
+        if ( CurrItem->CurrAlarm->Next != NULL ) { CurrItem->CurrAlarm = CurrItem->CurrAlarm->Next; }
+      }
+      
+    } else if (bpress == LEFT) {                                                // Set the Function to the Previous Function
+      if ( Func == ALARM ) {
+        if ( CurrItem->CurrAlarm->Prev != NULL ) {
+          CurrItem->CurrAlarm = CurrItem->CurrAlarm->Prev;
+        } else {
+          if ( CurrItem->Set != NULL ) { Func = SET; } else { Func = MAIN; }
+        }
+      } else if ( Func == SET ) {
+        Func = MAIN;
+      }
     }
     
     LCD_display();                                      // Update Display after button press

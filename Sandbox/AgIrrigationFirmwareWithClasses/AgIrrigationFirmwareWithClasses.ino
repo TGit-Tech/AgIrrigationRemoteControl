@@ -48,6 +48,19 @@ PeerIOSerialControl XBee(TRANSCEIVER_ID,IOSerial,Serial);   // XBee(ArduinoID, I
 PeerRemoteMenu Menu(&XBee, &LCD, SBUZZ);    // Menu initizlization starts interrupts which disturb XBee Config.
 #endif
 
+/*
+ * Kp: Determines how aggressively the PID reacts to the current amount of error (Proportional) (double >=0)
+Ki: Determines how aggressively the PID reacts to error over time (Integral) (double>=0)
+Kd: Determines how aggressively the PID reacts to the change in error (Derivative) (double>=0)
+POn: Either P_ON_E (Default) or P_ON_M. Allows Proportional on Measurement to be specified. 
+#define P_ON_M 0
+#define P_ON_E 1
+ */
+double Setpoint, Input, Output;
+PID myPID(&Input, &Output, &Setpoint,2,5,1,P_ON_M, DIRECT); //P_ON_M specifies that Proportional on Measurement be used
+                                                            //P_ON_E (Proportional on Error) is the default behavior
+
+
 /******************************************************************************************************************//**
  * @brief  Arduino Sketch Setup routine - Initialize the environment.
  * @remarks
@@ -95,24 +108,27 @@ void setup(){
 
   // StorePin allows Storing a user-set value on a virtual pin so the value can be changed remotely
   MenuItem *battItem, *powerItem, *pressItem, *waterItem;
-  //               AddMenuItem(     Text,      Device,  Pin,    Modifier,   Settable, [SetStorePin] );
-  battItem  = Menu.AddMenuItem( "Battery(B)",      1,   A1,    BATTVOLTS,   READONLY );
-  powerItem = Menu.AddMenuItem( "Power(P)",       10,    7,        ONOFF,   SETTABLE );
-  waterItem = Menu.AddMenuItem( "Water(L)",       10,   64,          RAW,     PIDSET,           80 );
-  pressItem = Menu.AddMenuItem( "Pressure(R)",    10,   A3,     PRESSURE,   READONLY );
+  //               AddMenuItem(     Text,      Device,  Pin,  IsOnOff );
+  battItem  = Menu.AddMenuItem( "Battery(B)",      1,    A1,    false );
+  powerItem = Menu.AddMenuItem( "Power(P)",       10,     7,    true );
+  waterItem = Menu.AddMenuItem( "Water(L)",       10,    64,    false );
+  pressItem = Menu.AddMenuItem( "Pressure(R)",    10,    A3,    false );
   
+  //         AttachSet( DriveDevice, [DrivePin], [ValueStorePin], [PID] )
+  powerItem->AttachSet( READ_DEVICE_AND_PIN );
   
-  //Add(Lo/Hi)Alarm(    *Item,  ID,  Compare, DriveDevice, DrivePin, DriveValue, [ValueStorePin] );
-  Menu.AddLoAlarm(   battItem, 'b',     LESS,      BUZZER,   SBUZZ,      1000 );
-  Menu.AddLoAlarm(  powerItem, 'p',    EQUAL,      BUZZER,   SBUZZ,      1000 );
-  Menu.AddHiAlarm(  powerItem, 'P', NOTEQUAL,      BUZZER,   SBUZZ,      1000 );
-  Menu.AddLoAlarm(  waterItem, 'w',     LESS,      BUZZER,   SBUZZ,      1000 );
-  Menu.AddHiAlarm(  waterItem, 'W',  GREATER,      BUZZER,   SBUZZ,      1000 );
-  Menu.AddLoAlarm(  pressItem, 'r',     LESS,      BUZZER,   SBUZZ,      1000 );
-  Menu.AddHiAlarm(  pressItem, 'R',  GREATER,      BUZZER,   SBUZZ,      1000 );
+  //AttachAlarm(    *Item,  ID,  Compare, DriveDevice, DrivePin, DriveValue, [ValueStorePin] );
+  battItem->AttachAlarm( 'b',     LESS,      BUZZER,   SBUZZ,      1000 );
+  powerItem->AttachAlarm('p',    EQUAL,      BUZZER,   SBUZZ,      1000 );
+  powerItem->AttachAlarm('P', NOTEQUAL,      BUZZER,   SBUZZ,      1000 );
+  waterItem->AttachAlarm('w',     LESS,      BUZZER,   SBUZZ,      1000 );
+  waterItem->AttachAlarm('W',  GREATER,      BUZZER,   SBUZZ,      1000 );
+  pressItem->AttachAlarm('r',     LESS,      BUZZER,   SBUZZ,      1000 );
+  pressItem->AttachAlarm('R',  GREATER,      BUZZER,   SBUZZ,      1000 );
 
-  //AddPIDController(          *Item, DriveDevice, DrivePin,   Kp,   Ki,  Kd, POn)
-  Menu.AddPIDController(   waterItem,          11,       A4,  100,  100, 100, P_ON_E);
+  //         AttachSet( DriveDevice,  [DrivePin], [ValueStorePin], [SetPID] );
+//                        _DriveDevice,  _DrivePin , _ValueStorePin , PID *_SetPID = NULL
+  waterItem->AttachSet(          11,  A4,              80,    &myPID );
   
   Menu.SetStartingItem(powerItem);
 #endif
