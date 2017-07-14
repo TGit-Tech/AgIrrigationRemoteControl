@@ -62,6 +62,9 @@ void setup(){
   LCD.print( "XBEE Config Mode" );
 #else
 //^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+//=====================================================================================================================
+//------------------------------ DEVICE PIN SETTINGS ------------------------------------------------------------------
+//=====================================================================================================================
   pinMode(10, INPUT);           // Fix for Q1-LCD Backlit shorting issue
   pinMode(A1, INPUT);           // A0 Controlled by LCD-Display library.
   pinMode(A2, INPUT_PULLUP);    // A1 is used by the Battery Level Indicator.
@@ -89,25 +92,65 @@ void setup(){
 //=====================================================================================================================
 //------------------------------ SYSTEM / MENU CONFIGURATION SETTINGS -------------------------------------------------
 //=====================================================================================================================
-  // Name the Devices in the System
+  /**************************************************************************
+   * DEFINE DEVICES
+   *  Menu.AddDevice ( uint8_t _Device, char *_Name );
+   *  - Device: the devices TRANSCEIVER_ID
+   *  - Name: the device name to be displayed
+   * **'Menu.ThisDevicesID ( uint8_t _DeviceID );' must be called to know what 'ThisDevice' is.
+  ***************************************************************************/
   Menu.AddDevice( 1, "Hand-Remote");
   Menu.AddDevice( 10,"Ditch-Pump");
-  Menu.AddDevice( 11,"Gate" );
+  Menu.AddDevice( 11,"Gate-Control" );
   Menu.ThisDevicesID( TRANSCEIVER_ID );
 
-  // StorePin allows Storing a user-set value on a virtual pin so the value can be changed remotely
-  MenuItem *battItem, *powerItem, *pressItem, *waterItem;
+  /**************************************************************************
+   * MENU ITEMS
+   *  Add the Device and Pin of the Items to be monitored (i.e. Read Items)
+   *  Common practice to identify (Alarm-ID) in parenthesis
+  ***************************************************************************/
+  MenuItem *battItem, *powerItem, *pressItem, *waterItem, *gateItem;
   //               AddMenuItem(     Text,      Device,  Pin,  IsOnOff );
   battItem  = Menu.AddMenuItem( "Battery(B)",      1,    A1,    false );
   powerItem = Menu.AddMenuItem( "Power(P)",       10,     7,    true );
   waterItem = Menu.AddMenuItem( "Water(L)",       10,    64,    false );
   pressItem = Menu.AddMenuItem( "Pressure(R)",    10,    A3,    false );
+  gateItem =  Menu.AddMenuItem( "Gate(G)",        11,    A4,    false );
 
-  //enum eSetType     { SET_MENU_ITEM_DEVICE_AND_PIN, SET_DIRECTLY, SET_WITH_PID };
-  //         AttachSet(      SetType, [DriveDevice], [DrivePin],  [ValueStorePin], PIDKp, PIDKi, PIDKd, PIDPOn, PIDDirection )
-  powerItem->AttachSet( SET_MENU_ITEM_DEVICE_AND_PIN );
-  waterItem->AttachSet( SET_WITH_PID,            11,         A4,            NOPIN,     1,     2,     3, P_ON_M, REVERSE );
+  /**************************************************************************
+   * ATTACH PID
+   * - Kp: Determines how aggressively the PID reacts to the current amount of error (Proportional) (double >=0)
+   * - Ki: Determines how aggressively the PID reacts to error over time (Integral) (double>=0)
+   * - Kd: Determines how aggressively the PID reacts to the change in error (Derivative) (double>=0)
+   * - POn: Either P_ON_E (Default) or P_ON_M. Allows Proportional on Measurement to be specified. 
+  ***************************************************************************/
+  //         AttachPID( OutputItem,  Kp,  Ki, Kd,     POn,  Direction )
+  waterItem->AttachPID(   gateItem,   1,   2,  3,  P_ON_M,  REVERSE );
   
+  /**************************************************************************
+   * ATTACH SET
+   * ** If no arguments are passed; The Read Device and Pin are used to SET.
+   * - [DriveDevice]  : Which device the SET will control
+   * - [DrivePin]     : The Pin on the Device the SET will control
+   * - [ValueStorePin]: The Virtual Pin the SET Value will be stored on.
+  ***************************************************************************/  
+  //         AttachSet( [DriveDevice], [DrivePin], [ValueStorePin] );
+  powerItem->AttachSet( );
+  gateItem->AttachSet( );
+  
+  /**************************************************************************
+   * ATTACH ALARMS
+   *  Create Alarms for every Menu-Item that should monitor boundaries
+   *  - ID              : A single character to identify the Alarm boundary
+   *  - [DriveDevice]   : Which 'device' to active when an Alarm boundary is crossed
+   *    -- Keyword 'BUZZER' can be used to activate a local BUZZER
+   *    -- The 'BUZZER' and 'ULTRASONIC_DISTANCE_METER' cannot be used together
+   * - [DrivePin]       : The Pin on the Device the Alarm will activate
+   * - [DriveValue]     : The Value the Alarm will activate
+   * - [HaltOnAlarm]    : Determines is all monitoring should stop when a boundary is crossed
+   * - [ViolationCount] : Alarm will not trigger until the boundary is crossed this many times consecutevely
+   * - [StorePin]       : A Virtual Pin the Boundary Value will be stored on
+  ***************************************************************************/  
   //        AttachAlarm(  ID,  Compare, [DriveDevice], [DrivePin],[DriveValue],[HaltOnAlarm],[ViolationCount],[StorePin] )
   battItem->AttachAlarm( 'b',     LESS,        BUZZER,      SBUZZ,      1000 );
   powerItem->AttachAlarm('p',    EQUAL,        BUZZER,      SBUZZ,      1000 );
@@ -117,20 +160,20 @@ void setup(){
   pressItem->AttachAlarm('r',     LESS,        BUZZER,      SBUZZ,      1000 );
   pressItem->AttachAlarm('R',  GREATER,        BUZZER,      SBUZZ,      1000 );
 
- //P_ON_M specifies that Proportional on Measurement be used
-                                                            //P_ON_E (Proportional on Error) is the default behavior
-                                                                  /*SET_MENU_ITEM_DEVICE_AND_PIN, SET_DIRECTLY, SET_WITH_PID
- * Kp: Determines how aggressively the PID reacts to the current amount of error (Proportional) (double >=0)
-Ki: Determines how aggressively the PID reacts to error over time (Integral) (double>=0)
-Kd: Determines how aggressively the PID reacts to the change in error (Derivative) (double>=0)
-POn: Either P_ON_E (Default) or P_ON_M. Allows Proportional on Measurement to be specified. 
-#define P_ON_M 0
-#define P_ON_E 1
- */
+  /**************************************************************************
+   * ATTACH A VALUE MODIFIER CALLBACK
+   *  Used to change a RAW value into a meaningful value for the display
+   *  All callback functions must be in the form 'int FunctionName(int raw)'
+   *    - Where 'raw' is the value read from the device pin.
+   *    - return is the value to be displayed
+   *  AttachValueModifier(FunctionName)
+  ***************************************************************************/ 
+  //AttachValueModifier(int (*_ValueModifierCallback)(int))
+  battItem->AttachValueModifier(ModifyBatteryValue);
+  pressItem->AttachValueModifier(ModifyPressureValue);
 
-
-
-  
+  // SetStartingItem() - This Function must be called to initialize Eprom memory
+  // Sets the first Menu-Item to be displayed when the device is first powered on.
   Menu.SetStartingItem(powerItem);
 #endif
 }
@@ -155,4 +198,16 @@ void loop(){
 #endif
 }
 
+//=====================================================================================================================
+//------------------------------ VALUE MODIFIER FUNCTIONS -------------------------------------------------------------
+//=====================================================================================================================
+// Modify the raw analog input value into voltage represented by the voltage divider
+int ModifyBatteryValue(int raw) {
+  return (long(raw)*BATT_R1_VINTOA1)/long(1.6*BATT_R2_A1TOGND);
+}
+
+// Show pressure as PSI ( pounds per square inch )
+int ModifyPressureValue(int raw) {
+  return (int) ((raw - 97) * 0.2137);
+}
 
