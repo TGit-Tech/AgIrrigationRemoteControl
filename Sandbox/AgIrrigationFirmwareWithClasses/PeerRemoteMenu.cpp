@@ -499,42 +499,26 @@ void PeerRemoteMenu::LCD_display() {
       LCD->print("ERR");
     } else if ( CurrItem->Value == VALUE_WAIT ) {
       LCD->print("?");
+    } else {
+      LCD->print( CurrItem->Value );
     }
   } else {
     if ( CurrItem->IsOnOff ) {
-      if ( Func == MAIN ) {
-        if ( CurrItem->Value == LOW ) {
-          LCD->print("Off");
-        } else if ( CurrItem->Value == HIGH ) {
-          LCD->print("On");
-        } else {
-          LCD->print("ERR");
-        }
-      } else if ( Func == SETPID ) {
-        if ( int(CurrItem->SetPID->Setpoint) == LOW ) {
-          LCD->print("Off");
-        } else if ( int(CurrItem->SetPID->Setpoint) == HIGH ) {
-          LCD->print("On");
-        } else {
-          LCD->print("ERR");
-        }
-      } else if ( Func == SET ) {
-        if ( CurrItem->Set->Value == LOW ) {
-          LCD->print("Off");
-        } else if ( CurrItem->Set->Value == HIGH ) {
-          LCD->print("On");
-        } else {
-          LCD->print("ERR");
-        }
-      } else if ( Func == ALARM ) {
-        if ( CurrItem->CurrAlarm->Value == LOW ) {
-          LCD->print("Off");
-        } else if ( CurrItem->CurrAlarm->Value == HIGH ) {
-          LCD->print("On");
-        } else {
-          LCD->print("ERR");
-        }
+      int Val = VALUE_ERR;
+      switch ( Func ) {
+        case MAIN:    Val = CurrItem->Value; break;
+        case SETPID:  Val = int(CurrItem->SetPID->Setpoint); break;
+        case SET:     Val = CurrItem->Set->Value; break
+        case ALARM:   Val = CurrItem->CurrAlarm->Value; break;
       }
+      if ( Val == LOW ) { 
+        LCD->print("Off"); 
+      } else if ( Val == HIGH ) {
+        LCD->print("On");
+      } else {
+        LCD->print("ERR");
+      }
+      
     } else {
       if ( Func == MAIN ) {
         if ( CurrItem->Value == VALUE_ERR) {
@@ -607,15 +591,12 @@ void PeerRemoteMenu::loop(){
     if ( clk - last_bpress_millis > START_STATUS_ITERATE) bIterating = true;
     if ( bIterating && (( clk - last_iter_millis ) > ITERATE_EVERY) && !AlarmHalt ) {
           Func = MAIN;                                        // Switch to 'MAIN' menu items
-          MenuItem *CurrentItem = CurrItem;                     // Mark the current item
-          MenuItem *Item;
-          do {                                                  // Find the next menu item with an Alarm
-            if ( CurrItem->Next != NULL ) { Item = CurrItem->Next; } else { Item = FirstItem; }
-            if ( Item->FirstAlarm != NULL ) break;              // Check if it has any alarms
-          } while ( Item != CurrentItem );                      // Stop checking on full rotation
-
-          CurrItem = Item;                                  // Set CurrItem to next item with an Alarm
-          GetItem(Item);                                    // Get the new value
+          if ( CurrItem->Next == NULL ) {
+            CurrItem = FirstItem;
+          } else {
+            CurrItem = CurrItem->Next;
+          }
+          GetItem(CurrItem);                                // Get the new value
           last_iter_millis=clk;                             // Record time for next iteration
           LCD_display();                                    // Update the display
     }

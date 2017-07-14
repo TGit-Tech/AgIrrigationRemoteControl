@@ -27,7 +27,6 @@
 enum Button       { UP, DOWN, RIGHT, LEFT, SELECT, NONE };
 enum eCompare     { LESS, GREATER, EQUAL, NOTEQUAL, EMPTY };
 enum eFunc        { MAIN, SETPID, SET, ALARM };
-enum eSetType     { SET_MENU_ITEM_DEVICE_AND_PIN, SET_DIRECTLY, SET_WITH_PID };
 
 #define NODEVICE              0
 #define NOPIN                 0xFF      // A non-usable value to signify 'NOPIN' has been assigned
@@ -57,7 +56,6 @@ typedef struct uSetPID {
 };
 
 typedef struct uSet {
-  eSetType        SetType= 0;
   int             Value = 0;
   uint8_t         DriveDevice = 0;
   uint8_t         DrivePin = NOPIN;
