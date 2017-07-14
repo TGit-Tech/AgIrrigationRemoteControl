@@ -144,6 +144,8 @@ void setup(){
    *  - ID              : A single character to identify the Alarm boundary
    *  - [DriveDevice]   : Which 'device' to active when an Alarm boundary is crossed
    *    -- Keyword 'BUZZER' can be used to activate a local BUZZER
+   *    ---- The BUZZER Pin is set on 'PeerRemoteMenu' Initialization
+   *    ---- Any 'DrivePin' Assignment with BUZZER is IGNORED
    *    -- The 'BUZZER' and 'ULTRASONIC_DISTANCE_METER' cannot be used together
    * - [DrivePin]       : The Pin on the Device the Alarm will activate
    * - [DriveValue]     : The Value the Alarm will activate
@@ -172,9 +174,8 @@ void setup(){
   battItem->AttachValueModifier(ModifyBatteryValue);
   pressItem->AttachValueModifier(ModifyPressureValue);
 
-  // SetStartingItem() - This Function must be called to initialize Eprom memory
-  // Sets the first Menu-Item to be displayed when the device is first powered on.
-  Menu.SetStartingItem(powerItem);
+  // Start Menu(Starting Item) - This Function must be called to start the Menu
+  Menu.Start(powerItem);
 #endif
 }
 

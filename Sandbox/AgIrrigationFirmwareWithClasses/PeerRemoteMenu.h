@@ -53,6 +53,7 @@ typedef struct uSetPID {
   double          Input = 0;
   double          Output = 0;
   double          Setpoint = 0;
+  unsigned int    EpromOffset = 0;
 };
 
 typedef struct uSet {
@@ -96,7 +97,6 @@ class MenuItem {
     int             Value = VALUE_ERR;                      // The last READ value of the 'Device' 'Pin' 0xFFFF is ERR
     bool            IsOnOff = false;                        // Determines if the Value is just an ON or OFF value
     int             (*ValueModifierCallback)(int) = NULL;   // Allows sketch functions to modify the RAW value read into something meaningful
-    unsigned int    EpromOffset = 0;                        // Location in EEPROM the Set and Alarm values are stored
     int             PacketID = -1;                          // For non-blocking communications
     uSet            *Set = NULL;                            // Gives the Menu Item an option to SET the target value
     uSetPID         *SetPID = NULL;                         // Menu Item read -> PID -> Menu Item Write
@@ -108,17 +108,17 @@ class MenuItem {
 
 class PeerRemoteMenu {
   public:
-    PeerRemoteMenu(PeerIOSerialControl *_XBee, LiquidCrystal *_LCD, uint8_t _BuzzerPin = 0 );
+    PeerRemoteMenu(PeerIOSerialControl *_XBee, LiquidCrystal *_LCD, uint8_t _BuzzerPin = NOPIN );
     MenuItem* AddMenuItem( char *_Text, uint8_t _Device, uint8_t _Pin, bool _IsOnOff );
-    void AddDevice ( uint8_t _Device, char *_Name );
-    void SetStartingItem ( MenuItem *Item );
-    void ThisDevicesID ( uint8_t _DeviceID );
-    void ThisDevicesID ();
-    int ValueModify(int Index, int SubIndex, int AddBy = 0);
+    void AddDevice ( uint8_t _Device, char *_Name );        // Add System Devices
+    void Start( MenuItem *StartItem );                      // Initialize Menu Setup and Set Starting Item
+    void ThisDevicesID ( uint8_t _DeviceID );               // SET - This Devices ID
+    void ThisDevicesID ();                                  // GET - This Devices ID
+    static void ButtonCheck(int adc_value);                 // Button check must be public for ISR()
     void loop();
-    static void ButtonCheck(int adc_value);
 
   private:
+    // Class Variables
     eFunc Func = MAIN;
     char *Devices[16];
     uint8_t ThisDeviceID = 0;
@@ -127,19 +127,21 @@ class PeerRemoteMenu {
     bool bIterating = false;                                    // Alarm only active while iterating the menu
     unsigned long wait_reply = 0;                               // Track non-blocking reply time
     unsigned long last_iter_millis = 0;                         // Track last status iteration time
-    uint8_t BuzzerPin = 0;
-    
-    void EEPROMSet(int i = -1);
-    void EEPROMGet(int i = -1);
+    uint8_t BuzzerPin = NOPIN;                                  // Track which pin the BUZZER is signalled on
+
+    // Object pointers
+    LiquidCrystal *LCD;
+    PeerIOSerialControl *XBee;
+    MenuItem *FirstItem = NULL;
+    MenuItem *CurrItem = NULL;
+        
+    // Function prototypes
+    void EEPROMSet(unsigned int Offset, int Value, int OnOff = -1);
+    int EEPROMGet(unsigned int Offset, bool *IsOn = NULL);
     void GetItem(MenuItem *Item);
     void SetPin(uint8_t _DriveDevice, uint8_t _DrivePin, int _Value, uint8_t _ValueStorePin = NOPIN );
     void CheckAlarmsUpdatePID(MenuItem *Item);
-    LiquidCrystal *LCD;
-    PeerIOSerialControl *XBee;
     void LCD_display();
-    MenuItem *FirstItem = NULL;
-    MenuItem *CurrItem = NULL;
-
 };
 
 #endif

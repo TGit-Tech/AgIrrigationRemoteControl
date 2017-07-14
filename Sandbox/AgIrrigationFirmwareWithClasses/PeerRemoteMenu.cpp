@@ -144,7 +144,7 @@ void MenuItem::AttachValueModifier(int (*_ValueModifierCallback)(int)) {
 //=====================================================================================================================
 //------------------------------ PEER-REMOTE-MENU METHODS -------------------------------------------------------------
 //=====================================================================================================================
-PeerRemoteMenu::PeerRemoteMenu(PeerIOSerialControl *_XBee, LiquidCrystal *_LCD, uint8_t _BuzzerPin = 0  ) {
+PeerRemoteMenu::PeerRemoteMenu(PeerIOSerialControl *_XBee, LiquidCrystal *_LCD, uint8_t _BuzzerPin = NOPIN  ) {
   LCD = _LCD;
   XBee = _XBee;
   BuzzerPin = _BuzzerPin;
@@ -167,7 +167,6 @@ MenuItem *PeerRemoteMenu::AddMenuItem( char *_Text, uint8_t _Device, uint8_t _Pi
     while ( thisItem->Next != NULL ) { thisItem = thisItem->Next; }
     thisItem->Next = new MenuItem;
     thisItem->Next->Prev = thisItem;
-    thisItem->Next->EpromOffset = thisItem->EpromOffset + 7;
     thisItem = thisItem->Next;
   }
   thisItem->Text = _Text;
@@ -177,10 +176,40 @@ MenuItem *PeerRemoteMenu::AddMenuItem( char *_Text, uint8_t _Device, uint8_t _Pi
   return thisItem;
 }
 
-void PeerRemoteMenu::SetStartingItem ( MenuItem *Item ) {
-  CurrItem = Item;
+void PeerRemoteMenu::Start( MenuItem *StartItem ) {
+  MenuItem *Item = FirstItem; uAlarm *Alarm = NULL; unsigned int Offset = 0;
+  
+  // Assign an EpromOffset to all items that need to have non-volatile values
+  // Then Read those values from Eprom
+  do {
+    if ( Item->Set != NULL ) {
+      Item->Set->EpromOffset = Offset;
+      Item->Set->Value = EEPROMGet(Offset);
+      Offset = Offset + 2; // Reserve 2-bytes
+    }
+    if ( Item->SetPID != NULL ) {
+      bool bIsAuto = false;
+      Item->SetPID->EpromOffset = Offset;
+      Item->SetPID->Setpoint = EEPROMGet(Offset,&bIsAuto);
+      if ( bIsAuto ) { 
+        Item->SetPID->OPID->SetMode(AUTOMATIC);
+      } else {
+        Item->SetPID->OPID->SetMode(MANUAL);
+      }
+      Offset = Offset + 3; // Reserve 3-bytes
+    }
+    Alarm = Item->FirstAlarm;
+    while ( Alarm != NULL ) {
+      Alarm->EpromOffset = Offset;
+      Alarm->Value = EEPROMGet(Offset,&Alarm->IsOn);
+      Offset = Offset + 3;  // Reserve 3-bytes
+      Alarm = Alarm->Next;
+    }
+    Item = Item->Next;
+  } while ( Item != FirstItem && Item != NULL );
+
+  CurrItem = StartItem;
   LCD_display();
-  // NEED TO SET EEPROM OFFSETS ACCORDING TO MENU ITEMS
 }
 
 void PeerRemoteMenu::AddDevice ( uint8_t _Device, char *_Name ) {
@@ -205,32 +234,26 @@ void PeerRemoteMenu::ThisDevicesID () {
  *    exmaple code
  *  @endcode
 **********************************************************************************************************************/
-/*
-void PeerRemoteMenu::EEPROMSet(int i = -1) {
-  if ( i == -1 ) i = idx;DB(("EEPROMSet("));DB((i));DBL((")"));
-  int iOffset = (i*5);      // (5)Bytes per Menu Item
+void PeerRemoteMenu::EEPROMSet(unsigned int Offset, int Value, int IsOn = -1) {
+  DB(("EEPROMSet("));DB((Offset));DBC;DB((Value));DBC;DB((IsOn));DBL((")"));
     
-  // Store Alarm Values in EEPROM
-  byte loAlarmLoByte = ((CurrItem->LoAlarm->Value >> 0) & 0xFF);
-  byte loAlarmHiByte = ((CurrItem->LoAlarm->Value >> 8) & 0xFF);
-  byte hiAlarmLoByte = ((CurrItem->HiAlarm->Value >> 0) & 0xFF);
-  byte hiAlarmHiByte = ((CurrItem->HiAlarm->Value >> 8) & 0xFF);
-  byte AlarmSet = 0x22;   // 2=OFF, A=ON
-  if ( CurrItem->LoAlarm->IsOn ) bitSet(AlarmSet,3);
-  if ( CurrItem->HiAlarm->IsOn ) bitSet(AlarmSet,7);
-    
-  EEPROM.update( iOffset, loAlarmLoByte);iOffset++;
-  DB(("EEPROM.update( "));DB((iOffset));DBC;DB((loAlarmLoByte, HEX));DBL((")"));
-  EEPROM.update( iOffset, loAlarmHiByte);iOffset++;
-  DB(("EEPROM.update( "));DB((iOffset));DBC;DB((loAlarmHiByte, HEX));DBL((")"));
-  EEPROM.update( iOffset, hiAlarmLoByte);iOffset++;
-  DB(("EEPROM.update( "));DB((iOffset));DBC;DB((hiAlarmLoByte, HEX));DBL((")"));
-  EEPROM.update( iOffset, hiAlarmHiByte);iOffset++;
-  DB(("EEPROM.update( "));DB((iOffset));DBC;DB((hiAlarmHiByte, HEX));DBL((")"));
-  EEPROM.update( iOffset, AlarmSet);iOffset++;
-  DB(("EEPROM.update( "));DB((iOffset));DBC;DB((AlarmSet, HEX));DBL((")"));
+  // Store the Value as two bytes
+  byte LoByte = ((Value >> 0) & 0xFF);
+  byte HiByte = ((Value >> 8) & 0xFF);
+  EEPROM.update( Offset, LoByte );
+  DB(("EEPROM.update( "));DB((Offset));DBC;DB((LoByte, HEX));DBL((")"));
+  EEPROM.update( (Offset + 1), HiByte );
+  DB(("EEPROM.update( "));DB((Offset + 1));DBC;DB((HiByte, HEX));DBL((")"));
+  
+  // If an 'IsOn' was given - store it in one byte
+  if ( IsOn != -1 ) {
+    byte IsOnByte = 0x22; // 2=OFF, A=ON
+    if ( IsOn ) bitSet(IsOnByte,3);
+    EEPROM.update ( (Offset + 2), IsOnByte ); 
+    DB(("EEPROM.update( "));DB((Offset + 2));DBC;DB((IsOnByte, HEX));DBL((")"));
+  }
 }
-*/
+
 /******************************************************************************************************************//**
  * @brief  Read Menu Item Values from Arduino EEPROM non-volitale memory.
  * @see    EEPROMSet for Addressing notation
@@ -238,31 +261,21 @@ void PeerRemoteMenu::EEPROMSet(int i = -1) {
  *   exmaple code
  * @endcode
 **********************************************************************************************************************/
-/*
-void PeerRemoteMenu::EEPROMGet(int i = -1) {
-  byte StatusByte = 0;
-  if ( i == -1 ) i = idx;DB(("EEPROMGet("));DB((i));DB((")"));
-  int iOffset = (i*5);                                          // (5)Bytes per Menu Item
+int PeerRemoteMenu::EEPROMGet(unsigned int Offset, bool *IsOn = NULL) {
+  DB(("EEPROMGet("));DB((Offset));DBL((")"));
 
-  // Get Alarm Values from EEPROM
-  DB(("EEPROMGet() - LoAlarmByte Offset = "));DB((iOffset));DBL((")"));
-  byte loAlarmLoByte = EEPROM.read( iOffset );iOffset++;
-  byte loAlarmHiByte = EEPROM.read( iOffset );iOffset++;
-  byte hiAlarmLoByte = EEPROM.read( iOffset );iOffset++;
-  byte hiAlarmHiByte = EEPROM.read( iOffset );iOffset++;
-  byte AlarmSet = EEPROM.read( iOffset );iOffset++;
-  
-  CurrItem->LoAlarm->Value = (int)((loAlarmLoByte << 0) & 0xFF) + ((loAlarmHiByte << 8) & 0xFF00);
-  CurrItem->HiAlarm->Value = (int)((hiAlarmLoByte << 0) & 0xFF) + ((hiAlarmHiByte << 8) & 0xFF00);
-  CurrItem->LoAlarm->State = bitRead(AlarmSet,3);
-  CurrItem->HiAlarm->State = bitRead(AlarmSet,7);
+  // Get Value from the first 2-byets
+  byte LoByte = EEPROM.read( Offset );
+  byte HiByte = EEPROM.read( Offset + 1 );
 
-  // NOPIN Values are 'true' if the AlarmSet Bit Check passes ( Value was set/not just garbage )
-  if ( CurrItem->Pin == NOPIN ) {
-    if ( (AlarmSet & 0x77) == 0x22 ) CurrItem->ValueValid = true;
+  // If an 'IsOn' pointer was supplied - set it with 3rd byte
+  if ( IsOn != NULL ) {
+    if ( bitRead(EEPROM.read((Offset + 2)),3) ) *IsOn = true;
   }
+  // Return the value read from Eprom
+  return (int)((LoByte << 0) & 0xFF) + ((HiByte << 8) & 0xFF00);
 }
-*/
+
 /******************************************************************************************************************//**
  * @brief  Obtain menu values
  * @remarks
@@ -359,7 +372,7 @@ void PeerRemoteMenu::CheckAlarmsUpdatePID(MenuItem *Item) {
       if ( Alarm->Violations >= Alarm->ViolationCount ) {
         if ( Alarm->HaltOnAlarm ) AlarmHalt = true;
         ActiveAlarm = Alarm->ID;
-        //SetPin( Alarm->DriveDevice, Alarm->DrivePin, Alarm->DriveValue, Alarm->StorePin );
+        SetPin( Alarm->DriveDevice, Alarm->DrivePin, Alarm->DriveValue, Alarm->StorePin );
       }
     }
     Alarm = Alarm->Next;
@@ -377,12 +390,7 @@ void PeerRemoteMenu::SetPin(uint8_t _DriveDevice, uint8_t _DrivePin, int _Value,
   DB(("SetPin("));DB((_DriveDevice));DBC;DB((_DrivePin));DBC;DB((_Value));DBC;DB((_ValueStorePin));DBL((")"));
 
   if ( _DriveDevice == BUZZER ) {
-    // NEED TO BLOCK THIS on ULTRASONIC
-    if ( _Value != 0 ) {
-      tone(_DrivePin,_Value);
-    } else {
-      noTone(_DrivePin);
-    }
+    if ( _Value != 0 ) { tone(BuzzerPin,_Value); } else { noTone(BuzzerPin); }
     
   } else if ( _DriveDevice > 0 && _DriveDevice < 16 && _DrivePin != NOPIN ) {
     if ( _DriveDevice == ThisDeviceID ) {
@@ -624,31 +632,41 @@ void PeerRemoteMenu::loop(){
 
       if ( Func == MAIN ) {
         GetItem(CurrItem);
+
+      } else if ( Func == SETPID ) {
+        // Toggle PID ( AUTO <-> OFF )
+        int IsOn = -1;
+        if ( CurrItem->SetPID->OPID->GetMode() == AUTOMATIC ) {
+          CurrItem->SetPID->OPID->SetMode(MANUAL);IsOn = MANUAL;                      // Toggle to Man(OFF)
+        } else {
+          CurrItem->SetPID->OPID->SetMode(AUTOMATIC);IsOn = AUTOMATIC;                // Toggle to Auto(ON)
+        }
+        EEPROMSet(CurrItem->SetPID->EpromOffset, CurrItem->SetPID->Setpoint, IsOn);   // Save Value/IsOn in Eprom
         
       } else if ( Func == SET ) {
         if ( CurrItem->Set != NULL ) {
+          
           // Setting an Item controlled by a PID MUST disable the PID
           if ( CurrItem->Set->AttachedPID != NULL ) {
-            CurrItem->Set->AttachedPID->OPID->SetMode(MANUAL);
-            CurrItem->Set->AttachedPID->Output = CurrItem->Set->Value; // Keep Output insync
-          } else {
-            SetPin( CurrItem->Set->DriveDevice, CurrItem->Set->DrivePin, CurrItem->Set->Value, CurrItem->Set->ValueStorePin );
+              CurrItem->Set->AttachedPID->OPID->SetMode(MANUAL);
+              CurrItem->Set->AttachedPID->Output = CurrItem->Set->Value;                // Keep Output insync
+              EEPROMSet(CurrItem->Set->AttachedPID->EpromOffset, CurrItem->Set->AttachedPID->Setpoint, MANUAL);
           }
+          SetPin( CurrItem->Set->DriveDevice, CurrItem->Set->DrivePin, CurrItem->Set->Value, CurrItem->Set->ValueStorePin );
+          EEPROMSet(CurrItem->Set->EpromOffset, CurrItem->Set->Value);              // Just a convenience save
+          Func = MAIN;                                                              // Return to MAIN for convenience
+        }
+        
+      } else if ( Func == ALARM ) {
+        if ( CurrItem->CurrAlarm != NULL ) {
+          if ( CurrItem->CurrAlarm->IsOn ) {                                        // Toggle Alarm ON <-> OFF
+            CurrItem->CurrAlarm->IsOn = false;
+          } else {
+            CurrItem->CurrAlarm->IsOn = true;
+          }
+          EEPROMSet(CurrItem->CurrAlarm->EpromOffset, CurrItem->CurrAlarm->Value, (int)CurrItem->CurrAlarm->IsOn );
         }
       }
-      //SetItem();                                          // SET the Menu Item to its new value
-      Func = MAIN;                                          // Return to the MAIN items once a SET is done
-      //GetItem();                                            // Get the Items Value
-      
-      // NEED TO SET THIS UP
-      //if ( Func == LOALARM || Func == HIALARM ) {                         // ----------- ALARMS -----------------
-//    if (CurrItem->Sub[Func].State == ON) {CurrItem->Sub[Func].State = !ON;} else {CurrItem->Sub[Func].State = ON;}
-//    EEPROMSet();                                                          // Save Alarm ON/OFF Status in EEPROM
-
-//  } else if ( Func == MAIN ) {                                          // ----------- MAIN -------------------
-    //GetItem(i);                                                           // Select will Refresh item
-
-    
     //------- (   UP   ) -------
     } else if (bpress == UP ) {
       
