@@ -48,18 +48,6 @@ PeerIOSerialControl XBee(TRANSCEIVER_ID,IOSerial,Serial);   // XBee(ArduinoID, I
 PeerRemoteMenu Menu(&XBee, &LCD, SBUZZ);    // Menu initizlization starts interrupts which disturb XBee Config.
 #endif
 
-/*
- * Kp: Determines how aggressively the PID reacts to the current amount of error (Proportional) (double >=0)
-Ki: Determines how aggressively the PID reacts to error over time (Integral) (double>=0)
-Kd: Determines how aggressively the PID reacts to the change in error (Derivative) (double>=0)
-POn: Either P_ON_E (Default) or P_ON_M. Allows Proportional on Measurement to be specified. 
-#define P_ON_M 0
-#define P_ON_E 1
- */
-double Setpoint, Input, Output;
-PID myPID(&Input, &Output, &Setpoint,2,5,1,P_ON_M, DIRECT); //P_ON_M specifies that Proportional on Measurement be used
-                                                            //P_ON_E (Proportional on Error) is the default behavior
-
 
 /******************************************************************************************************************//**
  * @brief  Arduino Sketch Setup routine - Initialize the environment.
@@ -102,9 +90,10 @@ void setup(){
 //------------------------------ SYSTEM / MENU CONFIGURATION SETTINGS -------------------------------------------------
 //=====================================================================================================================
   // Name the Devices in the System
-  Menu.AddDeviceName( 1, "Hand-Remote");
-  Menu.AddDeviceName( 10,"Ditch-Pump");
-  Menu.AddDeviceName( 11,"Gate" );
+  Menu.AddDevice( 1, "Hand-Remote");
+  Menu.AddDevice( 10,"Ditch-Pump");
+  Menu.AddDevice( 11,"Gate" );
+  Menu.ThisDevicesID( TRANSCEIVER_ID );
 
   // StorePin allows Storing a user-set value on a virtual pin so the value can be changed remotely
   MenuItem *battItem, *powerItem, *pressItem, *waterItem;
@@ -113,22 +102,34 @@ void setup(){
   powerItem = Menu.AddMenuItem( "Power(P)",       10,     7,    true );
   waterItem = Menu.AddMenuItem( "Water(L)",       10,    64,    false );
   pressItem = Menu.AddMenuItem( "Pressure(R)",    10,    A3,    false );
-  
-  //         AttachSet( DriveDevice, [DrivePin], [ValueStorePin], [PID] )
-  powerItem->AttachSet( READ_DEVICE_AND_PIN );
-  
-  //AttachAlarm(    *Item,  ID,  Compare, DriveDevice, DrivePin, DriveValue, [ValueStorePin] );
-  battItem->AttachAlarm( 'b',     LESS,      BUZZER,   SBUZZ,      1000 );
-  powerItem->AttachAlarm('p',    EQUAL,      BUZZER,   SBUZZ,      1000 );
-  powerItem->AttachAlarm('P', NOTEQUAL,      BUZZER,   SBUZZ,      1000 );
-  waterItem->AttachAlarm('w',     LESS,      BUZZER,   SBUZZ,      1000 );
-  waterItem->AttachAlarm('W',  GREATER,      BUZZER,   SBUZZ,      1000 );
-  pressItem->AttachAlarm('r',     LESS,      BUZZER,   SBUZZ,      1000 );
-  pressItem->AttachAlarm('R',  GREATER,      BUZZER,   SBUZZ,      1000 );
 
-  //         AttachSet( DriveDevice,  [DrivePin], [ValueStorePin], [SetPID] );
-//                        _DriveDevice,  _DrivePin , _ValueStorePin , PID *_SetPID = NULL
-  waterItem->AttachSet(          11,  A4,              80,    &myPID );
+  //enum eSetType     { SET_MENU_ITEM_DEVICE_AND_PIN, SET_DIRECTLY, SET_WITH_PID };
+  //         AttachSet(      SetType, [DriveDevice], [DrivePin],  [ValueStorePin], PIDKp, PIDKi, PIDKd, PIDPOn, PIDDirection )
+  powerItem->AttachSet( SET_MENU_ITEM_DEVICE_AND_PIN );
+  waterItem->AttachSet( SET_WITH_PID,            11,         A4,            NOPIN,     1,     2,     3, P_ON_M, REVERSE );
+  
+  //        AttachAlarm(  ID,  Compare, [DriveDevice], [DrivePin],[DriveValue],[HaltOnAlarm],[ViolationCount],[StorePin] )
+  battItem->AttachAlarm( 'b',     LESS,        BUZZER,      SBUZZ,      1000 );
+  powerItem->AttachAlarm('p',    EQUAL,        BUZZER,      SBUZZ,      1000 );
+  powerItem->AttachAlarm('P', NOTEQUAL,        BUZZER,      SBUZZ,      1000 );
+  waterItem->AttachAlarm('w',     LESS,        BUZZER,      SBUZZ,      1000 );
+  waterItem->AttachAlarm('W',  GREATER,        BUZZER,      SBUZZ,      1000 );
+  pressItem->AttachAlarm('r',     LESS,        BUZZER,      SBUZZ,      1000 );
+  pressItem->AttachAlarm('R',  GREATER,        BUZZER,      SBUZZ,      1000 );
+
+ //P_ON_M specifies that Proportional on Measurement be used
+                                                            //P_ON_E (Proportional on Error) is the default behavior
+                                                                  /*SET_MENU_ITEM_DEVICE_AND_PIN, SET_DIRECTLY, SET_WITH_PID
+ * Kp: Determines how aggressively the PID reacts to the current amount of error (Proportional) (double >=0)
+Ki: Determines how aggressively the PID reacts to error over time (Integral) (double>=0)
+Kd: Determines how aggressively the PID reacts to the change in error (Derivative) (double>=0)
+POn: Either P_ON_E (Default) or P_ON_M. Allows Proportional on Measurement to be specified. 
+#define P_ON_M 0
+#define P_ON_E 1
+ */
+
+
+
   
   Menu.SetStartingItem(powerItem);
 #endif

@@ -41,7 +41,7 @@ static void PeerRemoteMenu::ButtonCheck(int adc_value) {
   DB(("ButtonCheck("));DB((adc_value));DBL((")"));
   
   unsigned long clk = millis();
-  if ( clk - last_bpress_millis < Button_Debounce_ms ) return;         // Debounce button presses
+  if ( clk - last_bpress_millis < BUTTON_DEBOUNCE_MS ) return;         // Debounce button presses
 
   if (adc_value > 1000) { last_bpress = NONE; }
   else if (adc_value < 50) { last_bpress = RIGHT; }
@@ -87,21 +87,24 @@ MenuItem::MenuItem() {
   
 }
 
-void MenuItem::AttachSet(uint8_t _DriveDevice = 0, uint8_t _DrivePin = NOPIN, uint8_t _ValueStorePin = NOPIN, PID *_SetPID = NULL ) {
+void MenuItem::AttachSet(eSetType _SetType, uint8_t _DriveDevice = 0, uint8_t _DrivePin = NOPIN, uint8_t _ValueStorePin = NOPIN, double _PIDKp = 0, double _PIDKi = 0, double _PIDKd = 0, int _PIDPOn = 0, int _PIDDirection = 0 ) {
   if ( Set != NULL ) delete Set;
   Set = new uSet;
-  if ( _DriveDevice == READ_DEVICE_AND_PIN ) {
+  Set->SetType = _SetType;
+  if ( _SetType == SET_MENU_ITEM_DEVICE_AND_PIN ) {
     Set->DriveDevice = Device;
     Set->DrivePin = Pin;
-  } else {
-    Set->DriveDevice = _DriveDevice;
-    Set->DrivePin = _DrivePin;
-    Set->SetPID = _SetPID;
+  } else if ( _SetType == SET_WITH_PID ) {
+    Set->SetPID = new PID(Set->PIDInput, Set->PIDOutput, Set->PIDSetpoint, _PIDKp, _PIDKi, _PIDKd, _PIDPOn, _PIDDirection);
+    Set->SetPID->SetOutputLimits(1,1023); // Output limits to Arduino Analog limits
+    Set->SetPID->SetMode(AUTOMATIC);
   }
+  Set->DriveDevice = _DriveDevice;
+  Set->DrivePin = _DrivePin;
   Set->ValueStorePin = _ValueStorePin;
 }
 
-void MenuItem::AttachAlarm(char _ID, eCompare _Compare, uint8_t _StorePin = NOPIN, uint8_t _DriveDevice = 0, uint8_t _DrivePin = 0, int _DriveValue = 0) {
+void MenuItem::AttachAlarm(char _ID, eCompare _Compare, uint8_t _DriveDevice = 0, uint8_t _DrivePin = 0, int _DriveValue = 0, bool _HaltOnAlarm = false, uint8_t _ViolationCount = 1, uint8_t _StorePin = NOPIN ) {
   uAlarm *thisAlarm = NULL;
   if ( FirstAlarm == NULL ) {
     FirstAlarm = new uAlarm;
@@ -115,10 +118,12 @@ void MenuItem::AttachAlarm(char _ID, eCompare _Compare, uint8_t _StorePin = NOPI
   }
   thisAlarm->ID = _ID;
   thisAlarm->Compare = _Compare;
-  thisAlarm->StorePin = _StorePin;
   thisAlarm->DriveDevice = _DriveDevice;
   thisAlarm->DrivePin = _DrivePin;
   thisAlarm->DriveValue = _DriveValue;
+  thisAlarm->HaltOnAlarm = _HaltOnAlarm;
+  thisAlarm->ViolationCount = _ViolationCount;
+  thisAlarm->StorePin = _StorePin;
 }
 
 //=====================================================================================================================
@@ -134,6 +139,7 @@ PeerRemoteMenu::PeerRemoteMenu(PeerIOSerialControl *_XBee, LiquidCrystal *_LCD, 
   PCMSK1 = 0b00000001;          // Pin Change Interrupt Mask ( NA, RESET, A5, A4, A3, A2, A1, A0 ) - Activate A0              
   interrupts();                 // turn interrupts back on
 #endif
+
 }
 
 MenuItem *PeerRemoteMenu::AddMenuItem( char *_Text, uint8_t _Device, uint8_t _Pin, bool _IsOnOff ) {
@@ -159,12 +165,20 @@ MenuItem *PeerRemoteMenu::AddMenuItem( char *_Text, uint8_t _Device, uint8_t _Pi
 void PeerRemoteMenu::SetStartingItem ( MenuItem *Item ) {
   CurrItem = Item;
   LCD_display();
+  // NEED TO SET EEPROM OFFSETS ACCORDING TO MENU ITEMS
 }
 
-void PeerRemoteMenu::AddDeviceName ( uint8_t _Device, char *_Name ) {
+void PeerRemoteMenu::AddDevice ( uint8_t _Device, char *_Name ) {
   if ( _Device > 0 && _Device < 16 ) Devices[_Device] = _Name;
 }
 
+void PeerRemoteMenu::ThisDevicesID ( uint8_t _DeviceID ) {
+  ThisDeviceID = _DeviceID;
+}
+
+void PeerRemoteMenu::ThisDevicesID () {
+  return ThisDeviceID;
+}
 /*
   //------------[ Start-Up the Display ( DO NOT CHANGE! )]-------------  
   for ( int i = 0; i <= MenuItemsIdx; i++ ) {
@@ -297,48 +311,41 @@ void PeerRemoteMenu::EEPROMGet(int i = -1) {
  *   exmaple code
  * @endcode
 **********************************************************************************************************************/
-/*
-void PeerRemoteMenu::GetItem(int i = -1) {
-  
-  if ( i == -1 ) i = idx;                                                         // Default index = global 'idx'
-  DB(("GetItem("));DB((i));DBL((")"));                
-  if ( CurrItem->Pin == NOPIN ) return;
+void PeerRemoteMenu::GetItem(MenuItem *Item) {
+  DB(("GetItem()"));
+  if ( Item->Pin == NOPIN ) return;
 
-  CurrItem->ValueValid = !true;                                               // Invalidate last reading
-  if ( CurrItem->Device == TRANSCEIVER_ID ) {                         // Local Pin Read
-    if ( CurrItem->Pin >= A0 ) {                                                    // Read value from Hand-Remote Pin
-      CurrItem->Value = analogRead(CurrItem->Pin);
+  Item->Value = VALUE_ERR;                                               // Invalidate last reading
+  if ( Item->Device == ThisDeviceID ) {                         // Local Pin Read
+    if ( Item->Pin >= A0 ) {                                                    // Read value from Hand-Remote Pin
+      Item->Value = analogRead(CurrItem->Pin);
     } else {
-      CurrItem->Value = digitalRead(CurrItem->Pin);
+      Item->Value = digitalRead(CurrItem->Pin);
     }
-    CurrItem->ValueValid = true;            // Validate local Pin Values
-    CheckAlarms(i);                             // Check the value for Alarms
+    CheckAlarmsUpdatePID(Item);                             // Check the value for Alarms
   } else {                                                                        // Remote Pin Read; Set TransceiverID
-    if ( CurrItem->Device != XBee->TargetArduinoID() ) XBee->TargetArduinoID( CurrItem->Device );
+    if ( Item->Device != XBee->TargetArduinoID() ) XBee->TargetArduinoID( Item->Device );
 #if BLOCKING==1
-    if ( CurrItem->Pin >= A0 ) {
+    if ( Item->Pin >= A0 ) {
         wait_reply = millis();
-        PacketID = XBee->analogReadNB(CurrItem->Pin);
+        PacketID = XBee->analogReadNB(Item->Pin);
         DB(("PacketID="));DBL((PacketID));
     } else {
         wait_reply = millis();
-        PacketID = XBee->digitalReadNB(CurrItem->Pin);
+        PacketID = XBee->digitalReadNB(Item->Pin);
         DB(("PacketID="));DBL((PacketID));
     }
 #else
-    if ( CurrItem->Pin >= A0 ) {
-      CurrItem->Value = XBee->analogReadB(CurrItem->Pin);
+    if ( Item->Pin >= A0 ) {
+      Item->Value = XBee->analogReadB(Item->Pin);
     } else {
-      CurrItem->Value = XBee->digitalReadB(CurrItem->Pin);
+      Item->Value = XBee->digitalReadB(Item->Pin);
     }
-    if ( CurrItem->Value != -1 ) {
-      CurrItem->ValueValid = true;            // Validate Pin Values that return a legitimate value
-      CheckAlarms(i);                             // Check the value for Alarms
-    }
+    if ( Item->Value != VALUE_ERR ) CheckAlarmsUpdatePID(Item);              // Check the value for Alarms
 #endif
   }
 }
-*/
+
 /******************************************************************************************************************//**
  * @brief  Checks a Menu items 'Value' with its LOALARM and HIALARM values and trigger the buzzer if needed.
  * @remarks
@@ -349,31 +356,49 @@ void PeerRemoteMenu::GetItem(int i = -1) {
  *   exmaple code
  * @endcode
 **********************************************************************************************************************/
-/*
-void PeerRemoteMenu::CheckAlarms(int i = -1) {
-  if ( i == -1 ) i = idx;                                                         // Default index = global 'idx'
-  DB(("AlarmCheck("));DB((i));DBL((")"));
+void PeerRemoteMenu::CheckAlarmsUpdatePID(MenuItem *Item) {
+  DBL(("CheckAlarmsUpdatePID()"));
   
-  if ( !bIterating ) return;                                                      // No Alarms unless iterating
-  bool bOption = ( CurrItem->LastOptionIdx > 0 );
-  bool bLoAlarmOn = ( CurrItem->LoAlarm->IsOn && CurrItem->LoAlarm->ID != NULL );
-  bool bHiAlarmOn = ( CurrItem->HiAlarm->IsOn && CurrItem->HiAlarm->ID != NULL );
+  if ( !bIterating ) return;                                                      // No Alarms unless iterating 
 
-  if ( bOption && bHiAlarmOn ) AlarmActive = ( CurrItem->Value != CurrItem->HiAlarm->Value ); // NOT-EQUAL
-  
-  if ( CurrItem->ValueValid == true && !AlarmActive ) {                       // All Other Alarms are OFF if ERR
-    if ( !bOption ) {                                                             // Compare numeric Values
-      if ( bHiAlarmOn ) AlarmActive = ( CurrItem->Value > CurrItem->HiAlarm->Value );         // GREATER-THAN
-      if ( bLoAlarmOn && !AlarmActive ) AlarmActive = ( CurrItem->Value < CurrItem->LoAlarm->Value ); // LESS-THAN
-      if ( i == BATT && CurrItem->Value < 550 ) AlarmActive = false;      // Disable Low BATT for USB Plug-In
-    } else {
-      if ( bLoAlarmOn) AlarmActive = ( CurrItem->Value == CurrItem->LoAlarm->Value ); // Option Compare EQUALS
+  // Check if SETS have PID automatic updates
+  if ( Item->Set->SetPID != NULL ) {
+    if ( Item->Value != VALUE_ERR ) {
+      *Item->Set->PIDSetpoint = double(Item->Set->Value);
+      *Item->Set->PIDInput = double(Item->Value);
+      if ( Item->Set->SetPID->Compute() ) {
+        SetPin( Item->Set->DriveDevice, Item->Set->DrivePin, int(Item->Set->PIDOutput) );
+      }
     }
   }
-  //if ( AlarmActive ) tone(SBUZZ,CurrItem->LoAlarm->ToneHz);                     // Sound Buzzer
-
+  
+  uAlarm *Alarm;
+  Alarm = Item->FirstAlarm;
+  while ( Alarm != NULL ) {
+    if ( Alarm->IsOn ) {
+      switch ( Alarm->Compare ) {
+        case LESS: 
+          if ( Item->Value < Alarm->Value ) { Alarm->Violations++; } else { Alarm->Violations = 0; }
+          break;
+        case GREATER:
+          if ( Item->Value > Alarm->Value ) { Alarm->Violations++; } else { Alarm->Violations = 0; }
+          break;
+        case EQUAL:
+          if ( Item->Value = Alarm->Value ) { Alarm->Violations++; } else { Alarm->Violations = 0; }
+          break;
+        case NOTEQUAL:
+          if ( Item->Value != Alarm->Value ) { Alarm->Violations++; } else { Alarm->Violations = 0; }
+          break;
+      }
+      if ( Alarm->Violations >= Alarm->ViolationCount ) {
+        if ( Alarm->HaltOnAlarm ) AlarmHalt = true;
+        ActiveAlarm = Alarm->ID;
+        SetPin( Alarm->DriveDevice, Alarm->DrivePin, Alarm->DriveValue, Alarm->StorePin );
+      }
+    }
+    Alarm = Alarm->Next;
+  }
 }
-*/
 /******************************************************************************************************************//**
  * @brief  Preform value setting and recording when the 'Select' button is pressed.
  * @remarks
@@ -382,45 +407,36 @@ void PeerRemoteMenu::CheckAlarms(int i = -1) {
  *   exmaple code
  * @endcode
 **********************************************************************************************************************/
-/*
-void PeerRemoteMenu::SetItem(int i = -1) {
-  if ( i == -1 ) i = idx;int iSetValue = 0;DBL(("SetItem()"));
+void PeerRemoteMenu::SetPin(uint8_t _DriveDevice, uint8_t _DrivePin, int _Value, uint8_t _ValueStorePin = NOPIN ) {
+  DBL(("SetPin()"));
 
-  if ( Func == LOALARM || Func == HIALARM ) {                         // ----------- ALARMS -----------------
-    if (CurrItem->Sub[Func].State == ON) {CurrItem->Sub[Func].State = !ON;} else {CurrItem->Sub[Func].State = ON;}
-    EEPROMSet();                                                          // Save Alarm ON/OFF Status in EEPROM
-
-  } else if ( Func == MAIN ) {                                          // ----------- MAIN -------------------
-    GetItem(i);                                                           // Select will Refresh item
-
-  } else if ( Func == SET ) {                                           // ----------- SET --------------------
-    iSetValue = CurrItem->Set->Value;                                   // Record the current Set Value
-    if ( CurrItem->LastOptionIdx > 0 ) {                                                // IF [SET] value is an OPTION
-      if (CurrItem->Set->Value < 0 || CurrItem->Set->Value > MAXOPTIONS) return;  // Boundary Check the OPTION
-      iSetValue = CurrItem->Option[CurrItem->Set->Value].Value;                       // Record the OPTIONS [SET] Value
+  if ( _DriveDevice == BUZZER ) {
+    // NEED TO BLOCK THIS on ULTRASONIC
+    if ( _Value != 0 ) {
+      tone(_DrivePin,_Value);
+    } else {
+      noTone(_DrivePin);
     }
     
-    if ( CurrItem->Pin != NOPIN ) {                                         // ----- HARDWARE SET ------------------
-      CurrItem->ValueValid = !true;                                   // UN-trueATE the [MAIN] Value; its changing
-      if ( CurrItem->Device == TRANSCEIVER_ID ) {
-        if ( CurrItem->Pin >= A0 ) {
-          analogWrite(CurrItem->Pin, iSetValue);
-        } else {
-          digitalWrite(CurrItem->Pin, iSetValue);
-        }
+  } else if ( _DriveDevice > 0 && _DriveDevice < 16 && _DrivePin != NOPIN ) {
+    if ( _DriveDevice == ThisDeviceID ) {
+      if ( _DrivePin >= A0 ) {
+        analogWrite(_DrivePin, _Value);
       } else {
-        if ( CurrItem->Device != XBee->TargetArduinoID() ) XBee->TargetArduinoID( CurrItem->Device );
-        if ( CurrItem->Pin >= A0 ) {
-          XBee->analogWriteB(CurrItem->Pin, iSetValue);                  // Set the Remote Arduino Analog Pin
-        } else {
-          XBee->digitalWriteB(CurrItem->Pin, iSetValue);                 // Set the Remote Arduino Digital Pin
-        }
+        digitalWrite(_DrivePin, _Value);
       }
+    } else {
+      if ( _DriveDevice != XBee->TargetArduinoID() ) XBee->TargetArduinoID( _DriveDevice );
+      if ( _DrivePin >= A0 ) {
+        XBee->analogWriteB(_DrivePin, _Value);                  // Set the Remote Arduino Analog Pin
+      } else {
+        XBee->digitalWriteB(_DrivePin, _Value);                 // Set the Remote Arduino Digital Pin
+      }
+      if ( _ValueStorePin != NOPIN ) XBee->analogWriteB(_DrivePin, _Value);
     }
-    
   }
 }
-*/
+
 /******************************************************************************************************************//**
  * @brief  Properly display a Menu Item on the LCD screen
  * @code
@@ -434,19 +450,40 @@ void PeerRemoteMenu::LCD_display() {
   LCD->clear();LCD->setCursor(0,0);
   LCD->print( Devices[CurrItem->Device] );
   
-  // Right Side Alarm Identifiers
-  /*int pos = 15;
-  MenuItem *CheckItem = FirstItem;
-  do {
-    if ( CheckItem->FirstAlarm != NULL ) {
-      uAlarm *alarm = CheckItem->FirstAlarm;
-      do {
-        if ( alarm->IsOn ) { LCD->setCursor(pos,0);LCD->print(alarm->ID);pos--; }
-      } while ( alarm != CheckItem->LastAlarm );
+  // Top Row - Right Side Alarm Identifiers
+  if ( Func == MAIN || Func == SET ) {
+    if ( ActiveAlarm != NULL ) {
+      LCD->setCursor(0,13);LCD->print("!");LCD->print(ActiveAlarm);LCD->print("!");
+    } else {
+      unsigned int lastpos = ( 15 - strlen(Devices[CurrItem->Device]));     // Find last position before Device text cuts
+      uint8_t currPos = 15;                                                 // Track position Right -> Left
+      uAlarm *Alarm; MenuItem *Item;
+      Item = FirstItem;
+      while ( Item != NULL ) {                                              // Loop Menu Items
+        Alarm = Item->FirstAlarm;
+        while ( Alarm != NULL ) {                                           // Loop Alarms
+          if ( Alarm->IsOn ) {                                                // If Alarm is ON
+            if ( currPos > lastpos ) {                                        // Do we have room to show it
+              LCD->setCursor(0,currPos);LCD->print(Alarm->ID);currPos--;      // Show it and move cursor left
+            } else {
+              LCD->setCursor(0,lastpos);LCD->print(".");break;                // If no more room; show '.' and stop checking
+            }
+          }
+          Alarm = Alarm->Next;
+        }
+        if ( currPos > lastpos ) break;                                       // Break Item loop if no more room
+        Item = Item->Next;
+      }
     }
-    CheckItem = CheckItem->Next;    
-  } while ( CheckItem != FirstItem );
-    */    
+    
+  } else if ( Func == ALARM ) {
+    if ( CurrItem->CurrAlarm->IsOn ) {
+      LCD->setCursor(14,0); LCD->print("ON");
+    } else {
+      LCD->setCursor(13,0); LCD->print("OFF");
+    }
+  }
+  
   // Bottom Row ( Menu Item Text ) and Function
   LCD->setCursor(0,1);LCD->print(CurrItem->Text);
   LCD->setCursor(strlen(CurrItem->Text), 1);
@@ -473,7 +510,7 @@ void PeerRemoteMenu::LCD_display() {
   }
   
   // Bottom Row ( Display Value )
-  if ( Func == MAIN && CurrItem->ValueValid != true ) {
+  if ( Func == MAIN && CurrItem->Value == VALUE_ERR ) {
 #if BLOCKING==0
     if ( PacketID != -1 ) { LCD->print("?"); } else { LCD->print("ERR"); }
 #else
@@ -482,17 +519,43 @@ void PeerRemoteMenu::LCD_display() {
   } else {
     if ( CurrItem->IsOnOff ) {
       if ( Func == MAIN ) {
-        if ( CurrItem->Value != LOW ) { LCD->print("On"); } else { LCD->print("Off"); }
+        if ( CurrItem->Value == LOW ) {
+          LCD->print("Off");
+        } else if ( CurrItem->Value == HIGH ) {
+          LCD->print("On");
+        } else {
+          LCD->print("ERR");
+        }
       } else if ( Func == SET ) {
-        if ( CurrItem->Set->Value != LOW ) { LCD->print("On"); } else { LCD->print("Off"); }
+        if ( CurrItem->Set->Value == LOW ) {
+          LCD->print("Off");
+        } else if ( CurrItem->Set->Value == HIGH ) {
+          LCD->print("On");
+        } else {
+          LCD->print("ERR");
+        }
       } else if ( Func == ALARM ) {
-        if ( CurrItem->CurrAlarm->Value != LOW ) { LCD->print("On"); } else { LCD->print("Off"); }
+        if ( CurrItem->CurrAlarm->Value == LOW ) {
+          LCD->print("Off");
+        } else if ( CurrItem->CurrAlarm->Value == HIGH ) {
+          LCD->print("On");
+        } else {
+          LCD->print("ERR");
+        }
       }
     } else {
       if ( Func == MAIN ) {
-        LCD->print( CurrItem->Value );
+        if ( CurrItem->Value == VALUE_ERR) {
+          LCD->print("ERR");
+        } else {
+          LCD->print( CurrItem->Value );
+        }
       } else if ( Func == SET ) {
-        LCD->print( CurrItem->Set->Value );
+        if ( CurrItem->Set->Value == VALUE_ERR ) {
+          LCD->print("ERR");
+        } else {
+          LCD->print( CurrItem->Set->Value );
+        }
       } else if ( Func == ALARM ) {
         LCD->print( CurrItem->CurrAlarm->Value );
       }
@@ -517,14 +580,16 @@ void PeerRemoteMenu::loop(){
     if ( PacketID != -1 ) {                                     // Assign Non-Blocking Get Items
       int Ret = XBee->GetReply(PacketID);
       if ( Ret != -1 ) {                                        // -- If reply value was available
-        CurrItem->Value = Ret;                        // Assign received value
-        CurrItem->ValueValid = true;                      // Validate received value
-        //CheckAlarms(idx);                                       // Check value for alarms
+        CurrItem->Value = Ret;                                  // Assign received value
+        CheckAlarmsUpdatePID(CurrItem);                         // Check the value for alarms and Update PID
         PacketID = -1;                                          // Reset non-blocking packet
         LCD_display();                                          // Update Display with new value
-      } 
+      } else {
+        CurrItem->Value = VALUE_ERR;
+      }
       if ( millis() - wait_reply > XBee->Timeout() ) {
-        PacketID = -1;                                          // Time-out and ERR  
+        PacketID = -1;                                          // Time-out and ERR
+        CurrItem->Value = VALUE_ERR;
         LCD_display();                                          // Display the ERR
       }
     }
@@ -534,20 +599,21 @@ void PeerRemoteMenu::loop(){
   Button bpress = last_bpress;                                  // Determine button pressed
   last_bpress = NONE;                                           // Release button press
   
-  //--- Iterate Menu while Idle ---------------------------------------------------------------------
+  //--- Iterate Menu when Idle to check Alarms ------------------------------------------------------
   if( bpress == NONE ) {
     if ( clk - last_bpress_millis > START_STATUS_ITERATE) bIterating = true;
-    if ( bIterating && (( clk - last_iter_millis ) > ITERATE_EVERY) && !AlarmActive ) {
+    if ( bIterating && (( clk - last_iter_millis ) > ITERATE_EVERY) && !AlarmHalt ) {
           Func = MAIN;                                        // Switch to 'MAIN' menu items
           MenuItem *CurrentItem = CurrItem;                     // Mark the current item
           MenuItem *Item;
           do {                                                  // Find the next menu item with an Alarm
-            Item = CurrItem->Next;                              // Get Next MenuItem
+            if ( CurrItem->Next != NULL ) { Item = CurrItem->Next; } else { Item = FirstItem; }
             if ( Item->FirstAlarm != NULL ) break;              // Check if it has any alarms
           } while ( Item != CurrentItem );                      // Stop checking on full rotation
-          
+
           PacketID = -1;                                    // Clear the previous PacketID; We're moving
-          //GetItem();                                        // Get the new value
+          CurrItem = Item;                                  // Set CurrItem to next item with an Alarm
+          GetItem(Item);                                    // Get the new value
           last_iter_millis=clk;                             // Record time for next iteration
           LCD_display();                                    // Update the display
     }
@@ -557,14 +623,35 @@ void PeerRemoteMenu::loop(){
   //--- Process Button Press ------------------------------------------------------------------------
   } else {
     PacketID = -1;                                          // Clear Non-Blocked Packets
-    noTone(BuzzerPin);AlarmActive = false;                  // Turn off any alarms at button press
+    noTone(BuzzerPin);                                      // Turn off any alarms at button press
     bIterating = false;                                     // Stop Iterating Menu Items
     
     //------- ( SELECT ) -------
     if (bpress == SELECT) {
+
+      if ( Func == MAIN ) {
+        GetItem(CurrItem);
+      } else if ( Func == SET ) {
+        if ( CurrItem->Set != NULL ) {
+          if ( CurrItem->Set->SetPID != NULL ) {
+            // ?????????????????????????????????????????????????
+          } else {
+            SetPin( CurrItem->Set->DriveDevice, CurrItem->Set->DrivePin, CurrItem->Set->Value, CurrItem->Set->ValueStorePin );
+          }
+        }
+      }
       //SetItem();                                          // SET the Menu Item to its new value
       Func = MAIN;                                          // Return to the MAIN items once a SET is done
       //GetItem();                                            // Get the Items Value
+      
+      // NEED TO SET THIS UP
+      //if ( Func == LOALARM || Func == HIALARM ) {                         // ----------- ALARMS -----------------
+//    if (CurrItem->Sub[Func].State == ON) {CurrItem->Sub[Func].State = !ON;} else {CurrItem->Sub[Func].State = ON;}
+//    EEPROMSet();                                                          // Save Alarm ON/OFF Status in EEPROM
+
+//  } else if ( Func == MAIN ) {                                          // ----------- MAIN -------------------
+    //GetItem(i);                                                           // Select will Refresh item
+
     
     //------- (   UP   ) -------
     } else if (bpress == UP ) {
