@@ -17,7 +17,6 @@
 #include "WProgram.h"
 #endif
 
-
 #include <LiquidCrystal.h>
 #include <EEPROM.h>
 #include <PeerIOSerialControl.h>        //See https://github.com/tgit23/PeerIOSerialControl
@@ -52,6 +51,7 @@ typedef struct uSetPID {
   double          Input = 0;
   double          Output = 0;
   double          Setpoint = 0;
+  uint8_t         StorePin = NOPIN;
   unsigned int    EpromOffset = 0;
 };
 
@@ -59,7 +59,6 @@ typedef struct uSet {
   int             Value = 0;
   uint8_t         DriveDevice = 0;
   uint8_t         DrivePin = NOPIN;
-  uint8_t         ValueStorePin = NOPIN;
   unsigned int    EpromOffset = 0;
   uSetPID         *AttachedPID = NULL;
 };
@@ -84,12 +83,13 @@ typedef struct uAlarm {
 class MenuItem {
   public:
     MenuItem();
-    void AttachAlarm(char _ID, eCompare _Compare, uint8_t _DriveDevice = 0, uint8_t _DrivePin = 0, int _DriveValue = 0, bool _HaltOnAlarm = false, uint8_t _ViolationCount = 1, uint8_t _StorePin = NOPIN );
-    void AttachSet(uint8_t _DriveDevice = NODEVICE, uint8_t _DrivePin = NOPIN, uint8_t _ValueStorePin = NOPIN );
-    void AttachPID(MenuItem *_OutputItem, double _Kp, double _Ki, double _Kd, int _POn, int _Direction );
+    void AttachAlarm(eCompare _Compare, uint8_t _DriveDevice = NODEVICE, uint8_t _DrivePin = NOPIN, int _DriveValue = 0, bool _HaltOnAlarm = false, uint8_t _ViolationCount = 1, uint8_t _StorePin = NOPIN, char _ID = NULL );
+    void AttachSet(uint8_t _DriveDevice = NODEVICE, uint8_t _DrivePin = NOPIN );
+    void AttachPID(MenuItem *_OutputItem, double _Kp, double _Ki, double _Kd, int _POn, int _Direction, uint8_t _StorePin = NOPIN );
     void AttachValueModifier(int (*_ValueModifierCallback)(int));
-    
-    char            *Text = NULL;                           // The text to display on the LCD for this Menu item
+
+    char            *Name = NULL;                           // The text to display on the LCD for this Menu item
+    char            ID = NULL;
     uint8_t         Device = 0;                             // The device-ID the Menu Item reads
     uint8_t         Pin = NOPIN;                            // The Pin of the 'device' the Menu Item reads from
     int             Value = VALUE_ERR;                      // The last READ value of the 'Device' 'Pin' 0xFFFF is ERR
@@ -106,12 +106,10 @@ class MenuItem {
 
 class PeerRemoteMenu {
   public:
-    PeerRemoteMenu(PeerIOSerialControl *_XBee, LiquidCrystal *_LCD, uint8_t _BuzzerPin = NOPIN );
-    MenuItem* AddMenuItem( char *_Text, uint8_t _Device, uint8_t _Pin, bool _IsOnOff );
+    PeerRemoteMenu(PeerIOSerialControl *_XBee, LiquidCrystal *_LCD, uint8_t _ThisDeviceID, uint8_t _BuzzerPin = NOPIN );
+    MenuItem* AddMenuItem( char *_Name, char _ID, uint8_t _Device, uint8_t _Pin, bool _IsOnOff );
     void AddDevice ( uint8_t _Device, char *_Name );        // Add System Devices
     void Start( MenuItem *StartItem );                      // Initialize Menu Setup and Set Starting Item
-    void ThisDevicesID ( uint8_t _DeviceID );               // SET - This Devices ID
-    void ThisDevicesID ();                                  // GET - This Devices ID
     static void ButtonCheck(int adc_value);                 // Button check must be public for ISR()
     void loop();
 
@@ -137,8 +135,8 @@ class PeerRemoteMenu {
     void EEPROMSet(unsigned int Offset, int Value, int OnOff = -1);
     int EEPROMGet(unsigned int Offset, bool *IsOn = NULL);
     void GetItem(MenuItem *Item);
-    void SetPin(uint8_t _DriveDevice, uint8_t _DrivePin, int _Value, uint8_t _ValueStorePin = NOPIN );
-    void CheckAlarmsUpdatePID(MenuItem *Item);
+    void SetPin(uint8_t _DriveDevice, uint8_t _DrivePin, int _Value );
+    void CheckValue(MenuItem *Item);
     void LCD_display();
 };
 

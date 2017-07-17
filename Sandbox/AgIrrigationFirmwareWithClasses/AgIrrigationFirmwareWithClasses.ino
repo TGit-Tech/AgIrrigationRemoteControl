@@ -10,45 +10,52 @@
 **********************************************************************************************************************/
 #include "PeerRemoteMenu.h"
 
-#define HAND_REMOTE 0
-#define PUMP_CONTROLLER 1
+#define NO_LCD 0
+#define LCD_ON_REMOTE 1
+#define LCD_ON_CONTROLLER 2
 //=====================================================================================================================
 //------------------------------ SIMPLE USER CONFIGURATION SETTINGS ---------------------------------------------------
 //=====================================================================================================================
-#define FIRMWARE_IS_FOR         PUMP_CONTROLLER   // Firmware for a 'HAND_REMOTE' or 'PUMP_CONTROLLER'
-#define BUILD_VERSION                  20170706   // Release Version used to Build the Unit ( without the dots )
-#define TRANSCEIVER_ID                        1   // Unique numeric (ID)entity for this Unit(1-15)
+#define TRANSCEIVER_ID                       10   // Unique numeric (ID)entity for this Unit(1-15)
 #define XBEECONFIG                            0   // Configure the XBEE using XCTU Digi Software by setting this to 1
-#define CONTROLLER_HAS_LCD                    1   // Set to '1' if Pump-Controller has the LCD Screen expansion
+
+#define LCD_INSTALLED         LCD_ON_CONTROLLER   // Activate/Deactivate the LCD Control and Menu System
+#define UTRASONIC_METER_INSTALLED             0   // 0=NO, 1=YES; Is an Ultrasonic meter installed on THIS device?
+#define BUILD_VERSION                  20170706   // Release Version used to Build the Unit ( without the dots )
 
 //=====================================================================================================================
 //------------------------------ ADVANCED CONFIGURATION SETTINGS ------------------------------------------------------
 //=====================================================================================================================
-#if BUILD_VERSION>20170524
-  #define SS_TX_PIN 2                     // TX -> XBEE-DIN ( Closest to UNO )
-  #define SS_RX_PIN 3                     // RX -> XBEE-DOUT ( Farthest from UNO )
-  #define SBUZZ 12                        // Buzzer Signal Pin (S)
-  #define PBUZZ 13                        // Buzzer Power Pin (+)
-#else                                   // vvvvvvvv [ Build Release 2017.05.24 Pins ] vvvvvvvvvvvvvv
-  #define SS_TX_PIN 11                    // TX -> XBEE-DIN ( Closest to UNO )
-  #define SS_RX_PIN 12                    // RX -> XBEE-DOUT ( Farthest from UNO )
-  #define SBUZZ 2                         // Buzzer Signal Pin (S)
-#endif                                  // ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-#define BATT_R1_VINTOA1   1500          // Integer Value of BATTVOLT Resistor VIN -> A1 in KOhms
-#define BATT_R2_A1TOGND   510           // Integer Value of BATTVOLT Resistor A1 -> GND in KOhms
+#if BUILD_VERSION>20170524                  // vvvvvvvv [ Newest UnReleased Build ] vvvvvvvvvvvvvv
+  #define SS_TX_PIN 2                       // TX -> XBEE-DIN ( Closest to UNO )
+  #define SS_RX_PIN 3                       // RX -> XBEE-DOUT ( Farthest from UNO )
+  #define SBUZZ 12                          // Buzzer Signal Pin (S)
+  #define PBUZZ 13                          // Buzzer Power Pin (+)
+#else                                       // vvvvvvvv [ Build Release 2017.05.24 Pins ] vvvvvvvvvvvvvv
+  #define SS_TX_PIN 11                      // TX -> XBEE-DIN ( Closest to UNO )
+  #define SS_RX_PIN 12                      // RX -> XBEE-DOUT ( Farthest from UNO )
+  #define SBUZZ 2                           // Buzzer Signal Pin (S)
+#endif                                      // ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+#define BATT_R1_VINTOA1   1500              // Integer Value of BATTVOLT Resistor VIN -> A1 in KOhms
+#define BATT_R2_A1TOGND   510               // Integer Value of BATTVOLT Resistor A1 -> GND in KOhms
 
-#if FIRMWARE_IS_FOR==HAND_REMOTE
-LiquidCrystal LCD(8, 9, 4, 5, 6, 7);        // Pins used by the LCD Keypad Shield on the Hand-Remote
-#elif CONTROLLER_HAS_LCD==1
+#if LCD_INSTALLED==LCD_ON_REMOTE
+  LiquidCrystal LCD(8, 9, 4, 5, 6, 7);        // Pins used by the LCD Keypad Shield on the Hand-Remote
+#elif LCD_INSTALLED==LCD_ON_CONTROLLER
 LiquidCrystal LCD(12, 13, 8, 9, 10, 11);    // Pins used by the LCD Keypad Shield on the Pump-Controller
 #endif
+
+// Initialize Objects
 SSoftwareSerial IOSerial(SS_RX_PIN,SS_TX_PIN);              // SSoftSerial for XBEE ( rxPin, txPin ) - allows interrupts
 PeerIOSerialControl XBee(TRANSCEIVER_ID,IOSerial,Serial);   // XBee(ArduinoID, IOSerial, DebugSerial)
-#if XBEECONFIG==0             
-PeerRemoteMenu Menu(&XBee, &LCD, SBUZZ);    // Menu initizlization starts interrupts which disturb XBee Config.
+#if XBEECONFIG==0 && LCD_INSTALLED>0             
+PeerRemoteMenu Menu(&XBee, &LCD, TRANSCEIVER_ID, SBUZZ);    // Interrupts in RemoteMenu disturbs XBee Config.
 #endif
-
-
+#if UTRASONIC_METER_INSTALLED==1
+#include <NewPing.h>
+NewPing sonar(ULTRASONIC_TRIG_PIN, ULTRASONIC_ECHO_PIN, ULTRASONIC_MAX_DIST);
+unsigned long ulLastPing = 0;
+#endif
 /******************************************************************************************************************//**
  * @brief  Arduino Sketch Setup routine - Initialize the environment.
  * @remarks
@@ -56,15 +63,15 @@ PeerRemoteMenu Menu(&XBee, &LCD, SBUZZ);    // Menu initizlization starts interr
  * - pin#10 INPUT Backlit shorting see http://forum.arduino.cc/index.php?topic=96747.0
 **********************************************************************************************************************/
 void setup(){
-//--- FORWARD SERIAL TO XBEE for XBEECONFIG --------------------
+
 #if XBEECONFIG!=0
   LCD.clear();LCD.setCursor(0,0);
-  LCD.print( "XBEE Config Mode" );
+  LCD.print( "XBEE Config Mode" );  // Display XBEE Config Mode when Mode is active
 #else
-//^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-//=====================================================================================================================
-//------------------------------ DEVICE PIN SETTINGS ------------------------------------------------------------------
-//=====================================================================================================================
+
+  //=====================================================================================================================
+  //------------------------------ DEVICE PIN SETTINGS ------------------------------------------------------------------
+  //=====================================================================================================================
   pinMode(10, INPUT);           // Fix for Q1-LCD Backlit shorting issue
   pinMode(A1, INPUT);           // A0 Controlled by LCD-Display library.
   pinMode(A2, INPUT_PULLUP);    // A1 is used by the Battery Level Indicator.
@@ -83,15 +90,18 @@ void setup(){
   
   pinMode(SS_RX_PIN, INPUT);    // XBee DOUT Pin
   pinMode(SS_TX_PIN, OUTPUT);   // XBee DIN Pin
-    
+
+
+  // -------------- Start Communication and Display ------------------------------
   XBee.Timeout(3000);           // Set the Timeout for XBEE communications
   IOSerial.begin(9600);         // Start UART Communications with the XBee->Module
   Serial.begin(9600);           // Start Serial Monitor for debug
-  LCD.begin(16, 2);             // Start the LCD library
 
-//=====================================================================================================================
-//------------------------------ SYSTEM / MENU CONFIGURATION SETTINGS -------------------------------------------------
-//=====================================================================================================================
+  #if LCD_INSTALLED>0
+  LCD.begin(16, 2);             // Start the LCD library
+  //=====================================================================================================================
+  //------------------------------ SYSTEM / MENU CONFIGURATION SETTINGS -------------------------------------------------
+  //=====================================================================================================================
   /**************************************************************************
    * DEFINE DEVICES
    *  Menu.AddDevice ( uint8_t _Device, char *_Name );
@@ -99,26 +109,36 @@ void setup(){
    *  - Name: the device name to be displayed
    * **'Menu.ThisDevicesID ( uint8_t _DeviceID );' must be called to know what 'ThisDevice' is.
   ***************************************************************************/
-  Menu.AddDevice( 1, "Hand-Remote");
-  Menu.AddDevice( 10,"Ditch-Pump");
-  Menu.AddDevice( 11,"Gate-Control" );
-  Menu.ThisDevicesID( TRANSCEIVER_ID );
+  Menu.AddDevice( 1, "Remote");
+  Menu.AddDevice( 10,"Pump" );
+  Menu.AddDevice( 11,"Gate" );
 
   /**************************************************************************
    * MENU ITEMS
    *  Add the Device and Pin of the Items to be monitored (i.e. Read Items)
-   *  Common practice to identify (Alarm-ID) in parenthesis
   ***************************************************************************/
   MenuItem *battItem, *powerItem, *pressItem, *waterItem, *gateItem;
-  //               AddMenuItem(     Text,      Device,  Pin,  IsOnOff );
-  battItem  = Menu.AddMenuItem( "Battery(B)",      1,    A1,    false );
-  powerItem = Menu.AddMenuItem( "Power(P)",       10,     7,    true );
-  waterItem = Menu.AddMenuItem( "Water(L)",       10,    64,    false );
-  pressItem = Menu.AddMenuItem( "Pressure(R)",    10,    A3,    false );
-  gateItem =  Menu.AddMenuItem( "Gate(G)",        11,    A4,    false );
+  //               AddMenuItem(         Name, ID, Device, Pin, IsOnOff )
+  battItem  = Menu.AddMenuItem( "Battery",   'B',      1,  A1,   false );
+  powerItem = Menu.AddMenuItem( "Power",     'P',     10,   7,    true );
+  waterItem = Menu.AddMenuItem( "Water",     'W',     10,  64,   false );
+  pressItem = Menu.AddMenuItem( "Pressure",  'R',     10,  A3,   false );
+  gateItem =  Menu.AddMenuItem( "Gate",      'G',     11,  A4,   false );
 
   /**************************************************************************
-   * ATTACH PID
+   * ATTACH SET
+   * ** If no arguments are passed; The Read Device and Pin are used to SET.
+   * - [DriveDevice]  : Which device the SET will control
+   * - [DrivePin]     : The Pin on the Device the SET will control
+  ***************************************************************************/  
+  //         AttachSet( [DriveDevice], [DrivePin] );
+  powerItem->AttachSet( );
+  gateItem->AttachSet( );
+
+  /**************************************************************************
+   * ATTACH PID ( Output )
+   * - NOTE: AttachSet() if needed; MUST BE CALLED BEFORE AttachPID()
+   * -       this order allows the SET to shut-down the PID when set manually.
    * - Kp: Determines how aggressively the PID reacts to the current amount of error (Proportional) (double >=0)
    * - Ki: Determines how aggressively the PID reacts to error over time (Integral) (double>=0)
    * - Kd: Determines how aggressively the PID reacts to the change in error (Derivative) (double>=0)
@@ -128,20 +148,8 @@ void setup(){
   waterItem->AttachPID(   gateItem,   1,   2,  3,  P_ON_M,  REVERSE );
   
   /**************************************************************************
-   * ATTACH SET
-   * ** If no arguments are passed; The Read Device and Pin are used to SET.
-   * - [DriveDevice]  : Which device the SET will control
-   * - [DrivePin]     : The Pin on the Device the SET will control
-   * - [ValueStorePin]: The Virtual Pin the SET Value will be stored on.
-  ***************************************************************************/  
-  //         AttachSet( [DriveDevice], [DrivePin], [ValueStorePin] );
-  powerItem->AttachSet( );
-  gateItem->AttachSet( );
-  
-  /**************************************************************************
    * ATTACH ALARMS
-   *  Create Alarms for every Menu-Item that should monitor boundaries
-   *  - ID              : A single character to identify the Alarm boundary
+   *  Create Alarms for every Menu-Item that should monitor boundaries   
    *  - [DriveDevice]   : Which 'device' to active when an Alarm boundary is crossed
    *    -- Keyword 'BUZZER' can be used to activate a local BUZZER
    *    ---- The BUZZER Pin is set on 'PeerRemoteMenu' Initialization
@@ -152,15 +160,20 @@ void setup(){
    * - [HaltOnAlarm]    : Determines is all monitoring should stop when a boundary is crossed
    * - [ViolationCount] : Alarm will not trigger until the boundary is crossed this many times consecutevely
    * - [StorePin]       : A Virtual Pin the Boundary Value will be stored on
+   * - [ID]             : A single character to identify the Alarm boundary
+   *                      - If no 'ID' ( NULL ) is assigned; then the Items-ID 
+   *                      -- lowercase is assigned for LESS - EQUAL compares
+   *                      -- uppercase is assigned for GREATER - NOTEQUAL compares
   ***************************************************************************/  
-  //        AttachAlarm(  ID,  Compare, [DriveDevice], [DrivePin],[DriveValue],[HaltOnAlarm],[ViolationCount],[StorePin] )
-  battItem->AttachAlarm( 'b',     LESS,        BUZZER,      SBUZZ,      1000 );
-  powerItem->AttachAlarm('p',    EQUAL,        BUZZER,      SBUZZ,      1000 );
-  powerItem->AttachAlarm('P', NOTEQUAL,        BUZZER,      SBUZZ,      1000 );
-  waterItem->AttachAlarm('w',     LESS,        BUZZER,      SBUZZ,      1000 );
-  waterItem->AttachAlarm('W',  GREATER,        BUZZER,      SBUZZ,      1000 );
-  pressItem->AttachAlarm('r',     LESS,        BUZZER,      SBUZZ,      1000 );
-  pressItem->AttachAlarm('R',  GREATER,        BUZZER,      SBUZZ,      1000 );
+  // Defaults          (               = NODEVICE,    = NOPIN,          = 0,       = false,              = 1,    = NOPIN, NULL )
+  //        AttachAlarm(   Compare, [DriveDevice], [DrivePin], [DriveValue], [HaltOnAlarm], [ViolationCount], [StorePin], [ID] )
+  battItem->AttachAlarm(      LESS,        BUZZER,      NOPIN,         1000 );
+  powerItem->AttachAlarm(    EQUAL,        BUZZER,      NOPIN,         1000 );
+  powerItem->AttachAlarm( NOTEQUAL,        BUZZER,      NOPIN,         1000 );
+  waterItem->AttachAlarm(     LESS,        BUZZER,      NOPIN,         1000 );
+  waterItem->AttachAlarm(  GREATER,        BUZZER,      NOPIN,         1000 );
+  pressItem->AttachAlarm(     LESS,        BUZZER,      NOPIN,         1000 );
+  pressItem->AttachAlarm(  GREATER,        BUZZER,      NOPIN,         1000 );
 
   /**************************************************************************
    * ATTACH A VALUE MODIFIER CALLBACK
@@ -176,6 +189,7 @@ void setup(){
 
   // Start Menu(Starting Item) - This Function must be called to start the Menu
   Menu.Start(powerItem);
+  #endif
 #endif
 }
 
@@ -189,13 +203,25 @@ void setup(){
 **********************************************************************************************************************/
 void loop(){
 
-//--- FORWARD SERIAL TO XBEE for XBEECONFIG --------------------
 #if XBEECONFIG!=0
-  if ( IOSerial.available()>0 ) Serial.write(IOSerial.read());
+  if ( IOSerial.available()>0 ) Serial.write(IOSerial.read());    // Forward Serial to XBEE for XBEE Config
   if ( Serial.available()>0 ) IOSerial.write(Serial.read());
 #else
-//^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 
-  Menu.loop();
+  #if LCD_INSTALLED>0
+    Menu.loop();                                                  // RemoteMenu takes care of Communications
+  #else       
+                                                      
+  //---- Loop() Calls when NO_LCD is Installed -------------------------------------------------------------
+    XBee.Available();                                             // Check Communications
+    #if #if UTRASONIC_METER_INSTALLED==1                          // Read UltraSonic water level if installed
+      int ulCurrentTime = millis();
+      if ( ulCurrentTime > ulLastPing + 1000 ) {
+        XBee.VirtualPin(64, sonar.ping_in() );                    // Assign UltraSonic reading to Virt.Pin(64)
+        ulLastPing = ulCurrentTime;
+      }
+    #endif
+    
+  #endif
 #endif
 }
 
