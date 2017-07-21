@@ -37,57 +37,70 @@ enum eFunc        { MAIN, SETPID, SET, ALARM };
 #define START_STATUS_ITERATE  30000     // Start iterating Menu-Items after idle for (ms)
 #define ITERATE_EVERY         5000      // Iterate Menu-Items every (ms); when idle
 #define BUTTON_DEBOUNCE_MS    300       // How close in milliseconds two button presses will register
-
+#define ISONBIT               13
 
 volatile static unsigned long last_bpress_millis = 0;   // Track last button press time
 static Button last_bpress = NONE;                       // Store last button press for processing by the loop()
 static Button prev_bpress = NONE;                       // Used with 'ButtonHeld' to see if same button is registered twice
 static int ButtonHeld = 0;                              // Used to count how long a Button is held by counting
-
+static uint8_t ThisDeviceID = 0;
+    
 class MenuItem;
-typedef struct uSetPID {
-  MenuItem        *OutputItem = NULL;
-  PID             *OPID = NULL;
-  double          Input = 0;
-  double          Output = 0;
-  double          Setpoint = 0;
-  uint8_t         StorePin = NOPIN;
-  unsigned int    EpromOffset = 0;
+class uSetPID {
+  public:
+    MenuItem        *OutputItem = NULL;
+    PID             *OPID = NULL;
+    double          Input = 0;
+    double          Output = 0;
+    double          Setpoint = 0;
+    int             SetVPin = NOPIN;
+    bool            IsOn = false;
+    unsigned int    EpromOffset = 0;
+  private:
+  
 };
 
-typedef struct uSet {
-  int             Value = 0;
-  uint8_t         DriveDevice = 0;
-  uint8_t         DrivePin = NOPIN;
-  unsigned int    EpromOffset = 0;
-  uSetPID         *AttachedPID = NULL;
+class uSet {
+  public:
+    int             Value = 0;
+    uint8_t         DriveDevice = 0;
+    uint8_t         DrivePin = NOPIN;
+    unsigned int    EpromOffset = 0;
+    uint8_t         SetVPin = NOPIN;
+    bool            IsOn = false;
+    uSetPID         *AttachedPID = NULL;
+  private:
 };
 
-typedef struct uAlarm {
-  char            ID = NULL;
-  eCompare        Compare = LESS;
-  int             Value = 0;
-  uint8_t         StorePin = NOPIN;
-  uint8_t         DriveDevice = 0;
-  uint8_t         DrivePin = NOPIN;
-  unsigned int    DriveValue = LOW;
-  bool            IsOn = false;
-  bool            HaltOnAlarm = false;
-  uint8_t         ViolationCount = 1;
-  uint8_t         Violations = 0;
-  unsigned int    EpromOffset = 0;
-  uAlarm          *Next = NULL;
-  uAlarm          *Prev = NULL;
+class uAlarm {
+  public:
+    char            ID = NULL;
+    eCompare        Compare = LESS;
+    int             Value = 0;
+    uint8_t         SetVPin = NOPIN;
+    uint8_t         DriveDevice = 0;
+    uint8_t         DrivePin = NOPIN;
+    unsigned int    DriveValue = LOW;
+    bool            IsOn = false;
+    bool            IsActive = false;
+    bool            HaltOnAlarm = false;
+    uint8_t         ViolationCount = 1;
+    uint8_t         Violations = 0;
+    unsigned int    EpromOffset = 0;
+    uAlarm          *Next = NULL;
+    uAlarm          *Prev = NULL;
+  private:
+  
 };
 
 class MenuItem {
   public:
     MenuItem();
-    void AttachAlarm(eCompare _Compare, uint8_t _DriveDevice = NODEVICE, uint8_t _DrivePin = NOPIN, int _DriveValue = 0, bool _HaltOnAlarm = false, uint8_t _ViolationCount = 1, uint8_t _StorePin = NOPIN, char _ID = NULL );
+    void AttachAlarm(eCompare _Compare, uint8_t _DriveDevice = NODEVICE, uint8_t _DrivePin = NOPIN, int _DriveValue = 0, bool _HaltOnAlarm = false, uint8_t _ViolationCount = 1, char _ID = NULL, uint8_t _SetVPin = NOPIN );
     void AttachSet(uint8_t _DriveDevice = NODEVICE, uint8_t _DrivePin = NOPIN );
-    void AttachPID(MenuItem *_OutputItem, double _Kp, double _Ki, double _Kd, int _POn, int _Direction, uint8_t _StorePin = NOPIN );
+    void AttachPID(MenuItem *_OutputItem, double _Kp, double _Ki, double _Kd, int _POn, int _Direction, uint8_t _SetVPin = NOPIN );
     void AttachValueModifier(int (*_ValueModifierCallback)(int));
-
+    
     char            *Name = NULL;                           // The text to display on the LCD for this Menu item
     char            ID = NULL;
     uint8_t         Device = 0;                             // The device-ID the Menu Item reads
@@ -107,7 +120,7 @@ class MenuItem {
 class PeerRemoteMenu {
   public:
     PeerRemoteMenu(PeerIOSerialControl *_XBee, LiquidCrystal *_LCD, uint8_t _ThisDeviceID, uint8_t _BuzzerPin = NOPIN );
-    MenuItem* AddMenuItem( char *_Name, char _ID, uint8_t _Device, uint8_t _Pin, bool _IsOnOff );
+    MenuItem* AddMenuItem( char *_Name, char _ID, uint8_t _Device, uint8_t _Pin, bool _IsOnOff = false );
     void AddDevice ( uint8_t _Device, char *_Name );        // Add System Devices
     void Start( MenuItem *StartItem );                      // Initialize Menu Setup and Set Starting Item
     static void ButtonCheck(int adc_value);                 // Button check must be public for ISR()
@@ -117,8 +130,6 @@ class PeerRemoteMenu {
     // Class Variables
     eFunc Func = MAIN;
     char *Devices[16];
-    uint8_t ThisDeviceID = 0;
-    char ActiveAlarm = 0;                                       // Track if an Active Alarm is present
     bool AlarmHalt = false;                                     // Track when an Alarm should Halt the iteration
     bool bIterating = false;                                    // Alarm only active while iterating the menu
     unsigned long wait_reply = 0;                               // Track non-blocking reply time
