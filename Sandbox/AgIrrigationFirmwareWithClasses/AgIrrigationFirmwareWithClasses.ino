@@ -9,6 +9,7 @@
  *    tgit23        07/2017       Implemented keypad button interrupts and Non-Blocking functionality
 **********************************************************************************************************************/
 #include "PeerRemoteMenu.h"
+#include "MenuItem.h"
 
 #define REMOTE 0
 #define CONTROLLER 1
@@ -59,6 +60,8 @@
   LiquidCrystal LCD(8, 9, 4, 5, 6, 7);      // Pins used by the LCD Keypad Shield on the Hand-Remote
 #elif FIRMWARE_FOR==CONTROLLER_W_LCD
   LiquidCrystal LCD(12, 13, 8, 9, 10, 11);  // Pins used by the LCD Keypad Shield on the Pump-Controller
+
+  
 #endif
 
 //============================== INITIALIZE ===========================================================================
@@ -68,9 +71,12 @@ PeerIOSerialControl XBee(THISDEVICEID,IOSerial,Serial);   // XBee(ArduinoID, IOS
 PeerRemoteMenu Menu(&XBee, &LCD, THISDEVICEID, SBUZZ);    // Interrupts in RemoteMenu disturbs XBee Config.
 #endif
 #if UTRASONIC_METER_INSTALLED==1
-#include <NewPing.h>
-NewPing sonar(ULTRASONIC_TRIG_PIN, ULTRASONIC_ECHO_PIN, ULTRASONIC_MAX_DIST);
-unsigned long ulLastPing = 0;
+  #define ULTRASONIC_TRIG_PIN 4 // UltraSonic Trigger Pin
+  #define ULTRASONIC_ECHO_PIN 5           // UltraSonic Echo Pin
+  #define ULTRASONIC_MAX_DIST 400 // Longest Distance to Measure
+  #include <NewPing.h>
+  NewPing sonar(ULTRASONIC_TRIG_PIN, ULTRASONIC_ECHO_PIN, ULTRASONIC_MAX_DIST);
+  unsigned long ulLastPing = 0;
 #endif
 /******************************************************************************************************************//**
  * @brief  Arduino Sketch Setup routine - Initialize the environment.
@@ -137,66 +143,39 @@ void setup(){
   gateItem =  Menu.AddMenuItem( "Gate",      'G',     11,  A4);
 
   /**************************************************************************
-   * ATTACH SET
-   * ** If no arguments are passed; The Read Device and Pin are used to SET.
-   * - [DriveDevice]  : Which device the SET will control
-   * - [DrivePin]     : The Pin on the Device the SET will control
-  ***************************************************************************/  
-  //         AttachSet( [DriveDevice], [DrivePin] );
-  powerItem->AttachSet( );
-  gateItem->AttachSet( );
+   * ATTACH FUNCTIONS
+   * - FunctionType   : An attached function of a Menu-Item
+   * - Function Types :   SET_PIN
+   *                      PID_SETPOINT
+   *                      LESS_THAN_ALARM
+   *                      GREATER_THAN_ALARM
+   *                      EQUAL_TO_ALARM
+   *                      NOT_EQUAL_TO_ALARM
+   * - [DriveDevice]  : Which device the function will OUTPUT to
+   * - [DrivePin]     : Which device pin the function will OUTPUT to
+   * - [DriveValue]   : Number to drive the OUTPUT pin to else
+   *                      USER_SELECT_NUMERIC
+   *                      USER_SELECT_ONOROFF
+   *                      PID_OUTPUT
+   * - [ValueOnPin]   : Stores the User-Selected Function Value on a Virtual Pin for Remote Control
+   * - [ID]           :
+   * - [HaltOnAlarm]  :
+   * - [ViolationCount] :
+  ***************************************************************************/ 
+  //                                        = NODEVICE       = NOPIN   = USER_SELECT_NUMERIC,  = NOPIN, = NULL,  = false,  = 1
+  //         AttachFunction(      FunctionType, [DriveDevice], [DrivePin], [DriveValue], [ValueOnPin], [ID], [HaltOnAlarm], [ViolationCount] ) 
+  powerItem->AttachFunction(          SET_PIN);
+  gateItem->AttachFunction(           SET_PIN);
+  waterItem->AttachFunction(      PID_SETPOINT,            11,         A4,   PID_OUTPUT,           70);
+  // Alarms
+  powerItem->AttachFunction(NOT_EQUAL_TO_ALARM,      BUZZER,      SBUZZ,         1000);
+  waterItem->AttachFunction(   LESS_THAN_ALARM,      BUZZER,      SBUZZ,         1000);
+  waterItem->AttachFunction(GREATER_THAN_ALARM,      BUZZER,      SBUZZ,         1000);
+  pressItem->AttachFunction(   LESS_THAN_ALARM,      BUZZER,      SBUZZ,         1000);
 #if FIRMWARE_FOR==REMOTE
-  pidItem->AttachSet(            10,        70  );    // Control PID through virtual control
+  battItem->AttachFunction(  LESS_THAN_ALARM,        BUZZER,      SBUZZ,         1000);
+  pidItem->AttachFunction(           SET_PIN,            10,         70  );    // Control PID through virtual control
 #endif
-  /**************************************************************************
-   * ATTACH PID ( Output )
-   * - NOTE: AttachSet() if needed; MUST BE CALLED BEFORE AttachPID()
-   * -       this order allows the SET to shut-down the PID when set manually.
-   * - Kp: Determines how aggressively the PID reacts to the current amount of error (Proportional) (double >=0)
-   * - Ki: Determines how aggressively the PID reacts to error over time (Integral) (double>=0)
-   * - Kd: Determines how aggressively the PID reacts to the change in error (Derivative) (double>=0)
-   * - POn: Either P_ON_E (Default) or P_ON_M. Allows Proportional on Measurement to be specified. 
-   * - Direction: Either DIRECT or REVERSE
-  ***************************************************************************/
-  //         AttachPID( OutputItem,  Kp,  Ki, Kd,     POn,  Direction,  [SetVPin] )
-#if FIRMWARE_FOR==CONTROLLER_W_LCD
-  waterItem->AttachPID(   gateItem,   1,   2,  3,  P_ON_M,     DIRECT,        70 );
-#endif
-
-
-
-
-  /**************************************************************************
-   * ATTACH ALARMS
-   *  Create Alarms for every Menu-Item that should monitor boundaries   
-   *  - [DriveDevice]   : Which 'device' to active when an Alarm boundary is crossed
-   *    -- Keyword 'BUZZER' can be used to activate a local BUZZER
-   *    ---- The BUZZER Pin is set on 'PeerRemoteMenu' Initialization
-   *    ---- Any 'DrivePin' Assignment with BUZZER is IGNORED
-   *    -- The 'BUZZER' and 'ULTRASONIC_DISTANCE_METER' cannot be used together
-   * - [DrivePin]       : The Pin on the Device the Alarm will activate
-   * - [DriveValue]     : The Value the Alarm will activate
-   * - [HaltOnAlarm]    : Determines is all monitoring should stop when a boundary is crossed
-   * - [ViolationCount] : Alarm will not trigger until the boundary is crossed this many times consecutevely
-   * - [SetValueVPin]      : A Virtual Pin the Boundary Value will be stored on
-   * - [ID]             : A single character to identify the Alarm boundary
-   *                      - If no 'ID' ( NULL ) is assigned; then the Items-ID 
-   *                      -- lowercase is assigned for LESS - EQUAL compares
-   *                      -- uppercase is assigned for GREATER - NOTEQUAL compares
-  ***************************************************************************/  
-  //        AttachAlarm(               = NODEVICE,    = NOPIN,          = 0,       = false,              = 1, = NULL,  = NOPIN )
-  //        AttachAlarm(   Compare, [DriveDevice], [DrivePin], [DriveValue], [HaltOnAlarm], [ViolationCount],   [ID], [SetVPin] )
-#if FIRMWARE_FOR==REMOTE
-  battItem->AttachAlarm(      LESS,        BUZZER,      NOPIN,         1000 );
-#endif
-  powerItem->AttachAlarm(    EQUAL,        BUZZER,      NOPIN,         1000 );
-  powerItem->AttachAlarm( NOTEQUAL,        BUZZER,      NOPIN,         1000 );
-  waterItem->AttachAlarm(     LESS,        BUZZER,      NOPIN,         1000 );
-  waterItem->AttachAlarm(  GREATER,        BUZZER,      NOPIN,         1000 );
-  pressItem->AttachAlarm(     LESS,        BUZZER,      NOPIN,         1000 );
-  pressItem->AttachAlarm(  GREATER,        BUZZER,      NOPIN,         1000 );
-
-
 
   /**************************************************************************
    * ATTACH VALUE-MODIFIER
