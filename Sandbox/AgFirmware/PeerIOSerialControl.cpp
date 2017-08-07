@@ -5,6 +5,7 @@
  *    tgit23        1/2017       Original
  ******************************************************************************/
 #include "PeerIOSerialControl.h"
+
 #define ID_MASK 0x0F    // Bytes[0] [0000 1111] ArduinoID ( 0-15 )
 #define REPLY_BIT 4     // Bytes[0] [0001 0000] Reply-1, Send-0
 #define RW_BIT 5        // Bytes[0] [0010 0000] Read-1, Write-0
@@ -82,9 +83,9 @@ void PeerIOSerialControl::Timeout(int milliseconds) {
 int PeerIOSerialControl::Timeout() {
   return BlockingTimeoutMS;
 }
-void PeerIOSerialControl::VirtualPin(int Pin, int Value, PinStatus _PinStatus = IsOff) {
+void PeerIOSerialControl::VirtualPin(int Pin, int Value, PinStatus _PinStatus = OKAY) {
   if ( Pin > 63 && Pin < 128 ) {
-    iVirtualPin[Pin-64] = Value = ((Value << 0) & 0x0FFF) + ((_PinStatus << 12) & 0x3000);
+    iVirtualPin[Pin-64] = ((Value << 0) & 0x0FFF) + ((_PinStatus << 12) & 0x3000);
   }
 }
 int PeerIOSerialControl::VirtualPin(int Pin) {

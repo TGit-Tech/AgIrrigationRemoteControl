@@ -35,7 +35,7 @@
 #define READ 1
 #define WRITE 0
 #define VPIN_STATUS_ON
-typedef enum PinStatus { IsOff = 0, IsOn = 1, IsWait = 2, IsErr = 3 };
+typedef enum PinStatus { ISOFF = 0, ISON = 1, WAIT = 2, ERR = 3, OKAY = 4 };
 
 /**********************************************************************************************//**
  *  @class  PeerIOSerialControl
@@ -275,7 +275,7 @@ public:
  *    XBee.VirtualPin(70, 15200);
  *  @endcode
  **************************************************************************************/
-  void VirtualPin(int Pin, int Value, PinStatus _PinStatus = IsOff);
+  void VirtualPin(int Pin, int Value, PinStatus _PinStatus = OKAY);
 
 /***********************************************************************************//**
  * @brief Gets the Value for one of the Analog Virtual Pins (i.e. 64-127)
