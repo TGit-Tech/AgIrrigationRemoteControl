@@ -1,36 +1,69 @@
 /******************************************************************************************************************//**
  * @file PinPoint.cpp
- * @brief Class definition for PinPoint used for I/O Control of a Pin on a Device
+ * @brief Class definition for a PinPoint on the https://github.com/tgit23/AgIrrigationRemoteControl project.
+ * @remarks PinPoints define any hardwired Accessory like relays, meters, buzzers, lights, ultrasonic, etc...
  * @authors 
  *    tgit23        8/2017       Original
  **********************************************************************************************************************/
 #include "PinPoint.h"
 #include "UserControl.h"
 
-PeerIOSerialControl *PinPoint::XBee = NULL;
-uint8_t PinPoint::ThisDeviceID = 0;
-unsigned int PinPoint::LastEpromOffset = 0;
+#if DEBUG>0                                 // Activate Debug Messages ( DEBUG defined in PeerRemoteMenu.h )
+  #define DBL(x) Serial.println x
+  #define DB(x) Serial.print x
+  #define DBC Serial.print(", ")
+#else                                       // ELSE - Clear Debug Messages
+  #define DBL(x)
+  #define DB(x)
+  #define DBC  
+#endif
+
+PeerIOSerialControl *PinPoint::XBee = NULL; // Static XBee for all PinPoints
+uint8_t PinPoint::ThisDeviceID = 0;         // ThisDevice Identification Num for all PinPoints
 
 /******************************************************************************************************************//**
- * @brief Constructor
+ * @brief No-Name or ID Constructor
  * @remarks
- * - Raw values are still used behind the scene's only the displayed value is modified
  * @code
  *   exmaple code
  * @endcode
 **********************************************************************************************************************/
-PinPoint::PinPoint(uint8_t _Device, uint8_t _Pin, ePinType _PinType, char *_Name = NULL, char _ID = NULL ) {
+PinPoint::PinPoint(uint8_t _Device, uint8_t _Pin, ePinType _PinType ) {
+  PinPoint(_Device, _Pin, _PinType, NULL, NULL );
+}
+
+/******************************************************************************************************************//**
+ * @brief Named and ID Constructor
+ * @remarks
+ * @code
+ *   exmaple code
+ * @endcode
+**********************************************************************************************************************/
+PinPoint::PinPoint(uint8_t _Device, uint8_t _Pin, ePinType _PinType, char *_Name, char _ID ) {
   Device = _Device; Pin = _Pin; PinType = _PinType; Name = _Name; ID = _ID;  
   if ( Pin <= A0 ) IsOnOff = true;
-  if ( PinType == SETTABLE ) FirstControl = new UserControl( this, SET_PIN, this, ID );
+  if ( PinType == SETTABLE || PinType == USERCONTROL ) FirstControl = new UserControl( this, SET_PIN, this, ID );
   switch ( PinType ) {
     case INPIN:       pinMode(Pin,INPUT);break;
     case INPINHIGH:   pinMode(Pin,INPUT_PULLUP);break;
     case OUTPIN:      pinMode(Pin,OUTPUT);break;
     case BUZZPIN:     pinMode(Pin,OUTPUT);break;
-    case SONICPIN:    break;
     case SETTABLE:    pinMode(Pin,OUTPUT);break;
   }
+}
+
+/******************************************************************************************************************//**
+ * @brief Sonic Distance Meter Constructor
+ * @remarks
+ * @code
+ *   exmaple code
+ * @endcode
+**********************************************************************************************************************/
+PinPoint::PinPoint(uint8_t _Device, uint8_t _Pin, ePinType _PinType, char *_Name, char _ID, uint8_t _TrigPin, uint8_t _EchoPin ) {
+  Device = _Device; Pin = _Pin; PinType = _PinType; Name = _Name; ID = _ID; 
+  pinMode(_TrigPin, OUTPUT);
+  pinMode(_EchoPin, INPUT);
+  Sonar = new NewPing(_TrigPin, _EchoPin, 400);
 }
 
 /******************************************************************************************************************//**
@@ -51,9 +84,17 @@ void PinPoint::ReadValue(bool _ForceBlocking = false) {
   
   if ( Device == ThisDeviceID ) {                         //--- Local Pin Read ---
     DB(("LOCAL Get: Device="));DB((Device));DB((" Pin="));DBL((Pin));
-    if ( Pin >= A0 ) { mValue = analogRead(Pin); }
-    else { mValue = digitalRead(Pin); }
-    if ( mValue != -1 ) mStatus = OKAY;
+    if ( PinType != SONICPIN ) {
+      if ( Pin >= A0 ) { mValue = analogRead(Pin); }
+      else { mValue = digitalRead(Pin); }
+      if ( mValue != -1 ) mStatus = OKAY;
+    } else {
+      if ( Sonar != NULL ) {
+        mValue = Sonar->ping_in();                        // Measure Distance
+        if ( mValue != -1 ) mStatus = OKAY;               
+        XBee->VirtualPin(Pin, mValue);                    // Record measured on Virtual Pin
+      }
+    }
   }
   else if ( _ForceBlocking ) {
     DB(("REMOTE Get: Device="));DB((Device));DB((" Pin="));DBL((Pin));
@@ -61,6 +102,7 @@ void PinPoint::ReadValue(bool _ForceBlocking = false) {
     if ( Pin >= A0 ) { mValue = XBee->analogReadB(Pin); }
     else { mValue = XBee->digitalReadB(Pin); }
     if ( mValue != -1 ) mStatus = OKAY;
+    DB(("REMOTE Got: Value="));DBL((mValue));
   }
   else {                                                        //--- Remote Pin Read ---
     DB(("REMOTE Get: Device="));DB((Device));DB((" Pin="));DBL((Pin));
@@ -155,8 +197,8 @@ void PinPoint::SetTo(unsigned int _Value, PinStatus _Status = OKAY) {
 
   // Drive Buzzer
   if ( PinType == BUZZPIN ) {
-    if (_Value < 1) { noTone(Pin); }
-    else { tone(Pin, _Value); }
+    //if (_Value < 1) { noTone(Pin); }
+    //else { tone(Pin, _Value); }
   }
 
   // Drive Local Pin
@@ -199,12 +241,10 @@ void PinPoint::AttachValueModifier(int (*_ValueModifierCallback)(int)) {
 void PinPoint::Controls(PinPoint* _OutPin, eControlType _ControlType, char _ID, PinPoint* _StorePin = NULL) {
   if ( FirstControl == NULL ) {
     FirstControl = new UserControl( this, _ControlType, _OutPin, _ID, _StorePin );
-    LastEpromOffset = FirstControl->SetEpromOffset(LastEpromOffset);
   } else {
     UserControl *thisControl = FirstControl;
     while ( thisControl->Next != NULL ) { thisControl = thisControl->Next; }
     thisControl->Next = new UserControl( this, _ControlType, _OutPin, _ID, _StorePin );
-    LastEpromOffset = thisControl->Next->SetEpromOffset(LastEpromOffset);
     thisControl->Next->Prev = thisControl;
   }
 }

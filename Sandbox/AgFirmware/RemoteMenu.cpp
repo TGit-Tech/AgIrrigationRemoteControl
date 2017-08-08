@@ -5,13 +5,6 @@
  *    tgit23        8/2017       Original
  **********************************************************************************************************************/
 #include "RemoteMenu.h"
-#include "PeerIOSerialControl.h"
-
-
-#if XBEECONFIG>0                        // XBEECONFIG defined in PeerRemoteMenu.h
-  #undef BLOCKING                       // Undefine any previously defined BLOCKING
-  #define BLOCKING 1                    // Digi-Xbee-XCTU configuration software has problems with active interupts
-#endif
 
 #if DEBUG>0                             // Activate Debug Messages ( DEBUG defined in PeerRemoteMenu.h )
   #define DBL(x) Serial.println x
@@ -63,7 +56,6 @@ static void RemoteMenu::ButtonCheck(int adc_value) {
   }
 }
 
-#if BLOCKING==0
 /******************************************************************************************************************//**
  * @brief  ISR ( Interrupt Service Routine ) for Keypad Up, Down, and Right arrow buttons.
  * @remarks
@@ -72,9 +64,9 @@ static void RemoteMenu::ButtonCheck(int adc_value) {
  * - The original SoftwareSerial Library calls ALL Interrupts so a modified 'SSoftwareSerial' must be used to compile
 **********************************************************************************************************************/
 ISR(PCINT1_vect) {
+  //DB(("ISR"));
   RemoteMenu::ButtonCheck(analogRead(0));
 }
-#endif
 
 /******************************************************************************************************************//**
  * @brief Constructor
@@ -85,24 +77,67 @@ ISR(PCINT1_vect) {
  *   exmaple code
  * @endcode
 **********************************************************************************************************************/
-RemoteMenu::RemoteMenu(uint8_t RxPin, uint8_t TxPin, uint8_t ThisDevice, LiquidCrystal *_LCD) {
-  DB(("RemoteMenu::RemoteMenu("));DB((RxPin));DBC;DB((TxPin));DBC;DB((ThisDevice));DBL((")"));
+RemoteMenu::RemoteMenu(LiquidCrystal *_LCD) {
+  LCD = _LCD;
+}
+
+/******************************************************************************************************************//**
+ * @brief Setup must be called in sketch setup() function
+ * @remarks
+ * - Allows a single spot customization to the user interface
+ * - Display will show the items in the same order as they are defined here
+ * @code
+ *   exmaple code
+ * @endcode
+**********************************************************************************************************************/
+void RemoteMenu::Setup(uint8_t ThisDevice, bool XBeeConfig = false, int RxPin = -1, int TxPin = -1 ) {
+  if ( RxPin = -1 ) RxPin = 3; if ( TxPin = -1 ) TxPin = 2;   // Default Rx, Tx Pins
+  PinPoint::ThisDeviceID = ThisDevice;
+
+  if ( !XBeeConfig ) {
+    noInterrupts();               // switch interrupts off while messing with their settings  
+    PCICR =0x02;                  // Enable 'PCIE1' bit of PCICR Pin Change Interrupt the PCINT1 interrupt
+    PCMSK1 = 0b00000001;          // Pin Change Interrupt Mask ( NA, RESET, A5, A4, A3, A2, A1, A0 ) - Activate A0              
+    interrupts();                 // turn interrupts back on
+  }
   
-  // Start Communications
+  // Setup Communications
   pinMode(RxPin, INPUT);
   pinMode(TxPin, OUTPUT);
   static SSoftwareSerial IOSerial(RxPin, TxPin);
+    
+  // Start Communications & Display
+  IOSerial.begin(9600);
+  Serial.begin(9600);
   PinPoint::XBee = new PeerIOSerialControl(ThisDevice, IOSerial, Serial);
-  PinPoint::ThisDeviceID = ThisDevice;
-  LCD = _LCD;
+  LCD->begin(16, 2);  
+  DB(("RemoteMenu::Setup(Device="));DB((ThisDevice));DBC;
+  DB(("XBeeConfig="));DB((XBeeConfig));DBC;
+  DB(("RxPin="));DB((RxPin));DBC;
+  DB(("TxPin="));DB((TxPin));DBL((")"));
+  
+  if ( XBeeConfig ) {
+    LCD->clear();LCD->setCursor(0,0);
+    LCD->print( "XBEE Config Mode" );
+    while (1) {
+      if ( IOSerial.available()>0 ) Serial.write(IOSerial.read());
+      if ( Serial.available()>0 ) IOSerial.write(Serial.read());
+    }
+  }
+}
 
-#if BLOCKING==0
-  noInterrupts();               // switch interrupts off while messing with their settings  
-  PCICR =0x02;                  // Enable 'PCIE1' bit of PCICR Pin Change Interrupt the PCINT1 interrupt
-  PCMSK1 = 0b00000001;          // Pin Change Interrupt Mask ( NA, RESET, A5, A4, A3, A2, A1, A0 ) - Activate A0              
-  interrupts();                 // turn interrupts back on
-#endif
-
+/******************************************************************************************************************//**
+ * @brief Begin tells the Menu which PinPoint to start with
+ * @remarks
+ * @code
+ *   exmaple code
+ * @endcode
+**********************************************************************************************************************/
+void RemoteMenu::Begin(PinPoint *StartingPin) {
+  CurrPin = StartingPin;
+  CurrPin->ReadValue();delay(3);
+  CurrPin->UpdateAvailable();
+  LCD_display();
 }
 
 /******************************************************************************************************************//**
@@ -122,11 +157,6 @@ void RemoteMenu::AddPin(PinPoint *_PinPoint) {
   }
 }
 
-void RemoteMenu::StartDisplay(PinPoint *StartingPin) {
-  CurrPin = StartingPin;
-  LCD_display();
-}
-
 /******************************************************************************************************************//**
  * @brief  Setup the LCD menu
  * @remarks
@@ -136,9 +166,9 @@ void RemoteMenu::StartDisplay(PinPoint *StartingPin) {
  *   exmaple code
  * @endcode
 **********************************************************************************************************************/
-void RemoteMenu::DeviceDisplayName( uint8_t _Device, char *_Name ) {
-  DB(("RemoteMenu::DeviceDisplayName("));DB((_Device));DBC;DB((_Name));DBL((")"));
-  if ( _Device > 0 && _Device < 16 ) mDeviceDisplayName[_Device] = _Name;
+void RemoteMenu::DeviceName( uint8_t _Device, char *_Name ) {
+  DB(("RemoteMenu::DeviceName("));DB((_Device));DBC;DB((_Name));DBL((")"));
+  if ( _Device > 0 && _Device < 16 ) mDeviceName[_Device] = _Name;
 }
 
 /******************************************************************************************************************//**
@@ -152,28 +182,32 @@ void RemoteMenu::LCD_display() {
 
   // Display Device ( Top Row Left )
   LCD->clear();LCD->setCursor(0,0);
-  LCD->print( mDeviceDisplayName[CurrPin->Device] );
+  LCD->print( mDeviceName[CurrPin->Device] );
 
+  // Display Status ( Top Row Right )
   if ( CurrPin->CurrControl != NULL ) {
-    if ( CurrPin->CurrControl->ControlType != SET_PIN ) {
-      if ( CurrPin->CurrControl->IsOn() ) { LCD->setCursor(14,0);LCD->print("On"); }
-      else { LCD->setCursor(13,0);LCD->print("Off"); }
+    switch ( CurrPin->CurrControl->Status ) {
+      case ISOFF: LCD->setCursor(13,0);LCD->print("Off");break;
+      case ISON:  LCD->setCursor(14,0);LCD->print("On");break;
+      case WAIT:  LCD->setCursor(15,0);LCD->print("?");break;
+      case ERR:   LCD->setCursor(13,0);LCD->print("ERR");break;
+    }
+  } else {
+    int pos = 15;
+    for ( int i=0; i<16; i++ ) {
+      //DB(("OnControls["));DB((i));DB(("]="));DBL((UserControl::OnControls[i]));
+      if (UserControl::OnControls[i]!=' ' && UserControl::OnControls[i]!='\0') {
+        LCD->setCursor(pos--,0);
+        LCD->print(UserControl::OnControls[i]);
+      }
     }
   }
-/*
-  //char *Status;
-  char Status[20] = "";
-  CurrPin->GetStatusLine(Status);
-  if ( strlen(Status) + strlen(Devices[CurrPin->Device]) > 16 ) { LCD->setCursor(strlen(Devices[CurrPin->Device]),0); }
-  else { LCD->setCursor(16-strlen(Status),0); }
-  LCD->print(Status);
-*/
 
   //Display the Bottom Row
   LCD->setCursor(0,1);LCD->print(CurrPin->Name);LCD->print(" ");
+  
+  // Display the Read Value
   if ( CurrPin->CurrControl == NULL ) {
-
-    // Display the Read Value
     LCD->print("=");
     if ( CurrPin->GetStatus() == WAIT ) { LCD->print("?"); }
     else if ( CurrPin->GetStatus() == ERR ) { LCD->print("ERR"); }
@@ -184,7 +218,7 @@ void RemoteMenu::LCD_display() {
       LCD->print(CurrPin->GetModifiedValue());
     }
     
-  // ELSE - Display the Pin-Control
+  // ELSE - Display the Control Setpoint
   } else {
     switch ( CurrPin->CurrControl->ControlType ) {
       case LESS_THAN:     LCD->print(char(225));LCD->print("<"); break; // 225 = a - dots
@@ -212,6 +246,9 @@ void RemoteMenu::LCD_display() {
 **********************************************************************************************************************/
 void RemoteMenu::loop() {
 
+  const bool Block = true;
+  
+  PinPoint::XBee->Available();
   if ( CurrPin->UpdateAvailable() ) LCD_display();                      // Check for Pin Updates
   
   if ( bIterating ) {
@@ -227,10 +264,16 @@ void RemoteMenu::loop() {
   }
   else if (bpress == SELECT) {
     DBL(("Button-SELECT"));
-    if ( CurrPin->CurrControl == NULL ) { CurrPin->ReadValue(); }
-    else { 
-      if ( CurrPin->CurrControl->IsOn() ) { CurrPin->CurrControl->IsOn(false); }
-      else { CurrPin->CurrControl->IsOn(true); }
+    if ( CurrPin->CurrControl == NULL ) { CurrPin->ReadValue(Block); }
+    else {
+      if ( CurrPin->CurrControl->ControlType == SET_PIN ) {
+        CurrPin->CurrControl->Apply();delay(3);
+        CurrPin->CurrControl->Save();CurrPin->CurrControl = NULL;
+        CurrPin->ReadValue(Block);
+      } else {
+        if ( CurrPin->CurrControl->IsOn() ) { CurrPin->CurrControl->IsOn(false); }
+        else { CurrPin->CurrControl->IsOn(true); }
+      }
     }
   }
   else if (bpress == UP ) {
@@ -252,7 +295,7 @@ void RemoteMenu::loop() {
     if ( CurrPin->CurrControl == NULL ) {
       if ( CurrPin->Next == NULL ) { CurrPin = FirstPin; }            // Restart at First-Pin
       else { CurrPin = CurrPin->Next; }                               // Else goto Next-Pin
-      CurrPin->ReadValue();
+      CurrPin->ReadValue(Block);
     } else { 
       if ( ButtonHeld > 5 ) { CurrPin->CurrControl->SetPointAdd(-10); }
       else { CurrPin->CurrControl->SetPointAdd(-1); }

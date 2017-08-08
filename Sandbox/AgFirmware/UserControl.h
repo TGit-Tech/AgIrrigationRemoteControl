@@ -19,10 +19,11 @@ typedef enum eControlType { SET_PIN, PID_SET, DIRECTLY, LESS_THAN, GREATER_THAN,
 #define _ECONTROL
 #endif
 
+#define DEBUG 1
 class UserControl {
   public:
     UserControl(PinPoint * _InPin, eControlType _ControlType, PinPoint * _OutPin, char _ID, PinPoint * _StorePin = NULL);
-    unsigned int    SetEpromOffset(unsigned int _EpromOffset);
+    static char     OnControls[16];                   // Store 'ON' Controls for status display
     void            Save();
     void            SetPoint(int _Set);
     int             SetPoint();
@@ -36,11 +37,15 @@ class UserControl {
     UserControl     *Prev = NULL;
     eControlType    ControlType;
     
-  private:    
+  private:  
+    static unsigned int NextEpromOffset;
+    static int      ObjectCount;
+    
+    int             ObjectIndex = 0;
     char            ID = NULL;
-    bool            mIsOn = false;
     int             Setpoint = 0;
     unsigned int    EpromOffset = 0;
+    
     
     PinPoint        *InPin = NULL;
     PinPoint        *OutPin = NULL;

@@ -10,7 +10,7 @@
 #include <PeerIOSerialControl.h>        //See https://github.com/tgit23/PeerIOSerialControl
 #include <SoftwareSerial.h>
 
-#define TRANSCEIVER_ID 11               // Unique Transceiver ID for this Device (1-15)
+#define TRANSCEIVER_ID 6               // Unique Transceiver ID for this Device (1-15)
 #define XBEECONFIG 0                    // 1 to enter XBEE Configuration Mode, 0 Normal Operation
 #define DEBUG 0                         // 1 for DEBUG
 
