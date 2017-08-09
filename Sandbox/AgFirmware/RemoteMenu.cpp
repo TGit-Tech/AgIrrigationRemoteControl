@@ -204,7 +204,8 @@ void RemoteMenu::LCD_display() {
   }
 
   //Display the Bottom Row
-  LCD->setCursor(0,1);LCD->print(CurrPin->Name);LCD->print(" ");
+  LCD->setCursor(0,1);LCD->print(CurrPin->Name);
+  LCD->print("(");LCD->print(CurrPin->ID);LCD->print(")");
   
   // Display the Read Value
   if ( CurrPin->CurrControl == NULL ) {
@@ -246,10 +247,13 @@ void RemoteMenu::LCD_display() {
 **********************************************************************************************************************/
 void RemoteMenu::loop() {
 
-  const bool Block = true;
+  const bool Block = false;                                     // Should display block till value is read?
   
   PinPoint::XBee->Available();
-  if ( CurrPin->UpdateAvailable() ) LCD_display();                      // Check for Pin Updates
+  if ( CurrPin->UpdateAvailable() ) {                           // Check for Pin Updates
+    
+    LCD_display();                      
+  }
   
   if ( bIterating ) {
     if ( CurrPin->CurrControl != NULL ) {
@@ -286,7 +290,8 @@ void RemoteMenu::loop() {
       }
       CurrPin->ReadValue();
     } else { 
-      if ( ButtonHeld > 5 ) { CurrPin->CurrControl->SetPointAdd(10); }
+      if ( ButtonHeld > 30 ) { CurrPin->CurrControl->SetPointAdd(100); }
+      else if ( ButtonHeld > 5 ) { CurrPin->CurrControl->SetPointAdd(10); }
       else { CurrPin->CurrControl->SetPointAdd(1); }
     }                  // Add 1 if in a control
   }
@@ -297,7 +302,8 @@ void RemoteMenu::loop() {
       else { CurrPin = CurrPin->Next; }                               // Else goto Next-Pin
       CurrPin->ReadValue(Block);
     } else { 
-      if ( ButtonHeld > 5 ) { CurrPin->CurrControl->SetPointAdd(-10); }
+      if ( ButtonHeld > 30 ) { CurrPin->CurrControl->SetPointAdd(-100); }
+      else if ( ButtonHeld > 5 ) { CurrPin->CurrControl->SetPointAdd(-10); }
       else { CurrPin->CurrControl->SetPointAdd(-1); }
     }
   }

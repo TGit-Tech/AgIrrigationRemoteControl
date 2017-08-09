@@ -1,12 +1,19 @@
 /******************************************************************************************************************//**
  * @file PinPoint.h
- * @brief Class definition for PinPoint used for I/O ControlType of a Pin on a Device
+ * @brief Class definition for a I/O PinPoint on a Device
  * @authors 
  *    tgit23        8/2017       Original
  **********************************************************************************************************************/
 #ifndef _PINPOINT_H
 #define _PINPOINT_H
 
+#if defined(ARDUINO) && ARDUINO >= 100
+#include "arduino.h"
+#else
+#include "WProgram.h"
+#endif
+
+#include <avr/io.h>
 #include "PeerIOSerialControl.h"
 #include "NewPing.h"                        // See https://bitbucket.org/teckel12/arduino-new-ping/wiki/Home
 // Fix @ https://bitbucket.org/teckel12/arduino-new-ping/wiki/Multiple%20Definition%20of%20%22__vector_7%22%20Error 
@@ -18,7 +25,7 @@
 typedef enum eControlType { SET_PIN, PID_SET, DIRECTLY, LESS_THAN, GREATER_THAN, EQUAL_TO, NOT_EQUAL_TO };
 #define _ECONTROL
 #endif
-typedef enum ePinType { INPIN, INPINHIGH, OUTPIN, BUZZPIN, SONICPIN, SETTABLE, USERCONTROL };
+typedef enum ePinType { INPIN, INPINHIGH, OUTPIN, BUZZPIN, SONICPIN, SETTABLE, PWM, USERCONTROL };
 
 class UserControl;      // Forward declaration
 class PinPoint {
@@ -26,7 +33,8 @@ class PinPoint {
     PinPoint(uint8_t _Device, uint8_t _Pin, ePinType _PinType );
     PinPoint(uint8_t _Device, uint8_t _Pin, ePinType _PinType, char *_Name, char _ID );
     PinPoint(uint8_t _Device, uint8_t _Pin, ePinType _PinType, char *_Name, char _ID, uint8_t _TrigPin, uint8_t _EchoPin );
-    void Controls(PinPoint* _OutPin, eControlType _ControlType, char _ID, PinPoint* _StorePin = NULL);
+    void Controls(PinPoint* _OutPin, eControlType _ControlType, char _ID, uint8_t OnDevice = 0, PinPoint* _StorePin = NULL);
+    void Controls(PinPoint* _OutPin, eControlType _ControlType, char _ID, uint8_t OnDevice, double Kp, double Ki, double Kd, int POn, int PIDDirection, PinPoint * _StorePin = NULL);
     
     static PeerIOSerialControl *XBee;
     static uint8_t ThisDeviceID;
@@ -61,8 +69,9 @@ class PinPoint {
     unsigned long   mLastPing = 0;
     ePinType        PinType = INPIN;
     PinStatus       mStatus = ERR;
-
-    NewPing         *Sonar = NULL;
+    void            ApplyControls();
     
+    NewPing         *Sonar = NULL;
+    int             analogReadOutput(int pin);
 };
 #endif

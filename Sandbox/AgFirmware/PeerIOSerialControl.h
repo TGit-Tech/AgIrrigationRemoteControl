@@ -313,7 +313,18 @@ public:
  **************************************************************************************/
   PinStatus VirtualPinStatus(int Pin);
 
-  
+/***********************************************************************************//**
+ * @brief Gets the PWM Value for one of the local Digital Pins
+ * @return Value ( 0-255 )
+ * @remarks Publicly this function is more of a "Tool" than part of the protocol
+ * 
+ * <B>Example:</B>
+ *  @code{.cpp}
+ *    if ( XBee.analogReadOutput(3) > 130 ) return 0;
+ *  @endcode
+ **************************************************************************************/
+   int analogReadOutput(uint8_t pin);
+   
 private:
   Stream *COMPort;
   Stream *DBPort;

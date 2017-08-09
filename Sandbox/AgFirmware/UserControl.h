@@ -8,7 +8,7 @@
 #define _USERCONTROL_H
 
 #include "PinPoint.h"
-#include <PID_v1.h>
+#include "PID_v1.h"         // see https://playground.arduino.cc/Code/PIDLibrary
 #include <EEPROM.h>
 
 //typedef enum PinStatus { ISOFF = 0, ISON = 1, WAIT = 2, ERR = 3, OKAY = 4 };
@@ -23,6 +23,7 @@ typedef enum eControlType { SET_PIN, PID_SET, DIRECTLY, LESS_THAN, GREATER_THAN,
 class UserControl {
   public:
     UserControl(PinPoint * _InPin, eControlType _ControlType, PinPoint * _OutPin, char _ID, PinPoint * _StorePin = NULL);
+    UserControl(PinPoint * _InPin, eControlType _ControlType, PinPoint * _OutPin, char _ID, double Kp, double Ki, double Kd, int POn, int PIDDirection, PinPoint * _StorePin = NULL);
     static char     OnControls[16];                   // Store 'ON' Controls for status display
     void            Save();
     void            SetPoint(int _Set);
@@ -60,5 +61,6 @@ class UserControl {
     double          Kd = 0;
     int             POn = 0;
     int             PIDDirection = 0;
+    unsigned long   PIDLastCompute = 0;
 };
 #endif

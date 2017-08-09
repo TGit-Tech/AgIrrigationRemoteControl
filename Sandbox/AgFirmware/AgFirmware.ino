@@ -20,7 +20,7 @@
 #define GATE_CONTROLLER           13    // Head-gate Controller for PID-Set water level
 #define CHEM_CONTROLLER           14    // Chemical pump controller driven by Pivot On/Off signal
 //--------------------------------------------------------------------------------------------------
-#define THISDEVICE            HAND_REMOTE     // The device this Firmware is for
+#define THISDEVICE            PUMP_CONTROLLER     // The device this Firmware is for
 #define RELEASE               20170706        // Release Version used to Build the Units
 const bool XBEECONFIG =       false;          // Set to 'true' to configure Xbee with XCTU
 //#define DUMB_CONTROLLER                     // Dumb-Controllers only Receive and Send raw pin data
@@ -34,30 +34,30 @@ const bool XBEECONFIG =       false;          // Set to 'true' to configure Xbee
 //                                                                              (for Ultrasonic)
 //                  |---- DEVICE-----|-PIN-||-PinType---|--|--NAME--------|ID|--|Trig|Echo|-------
 //--------------------------------------------------------------------------------------------------
+PinPoint Battery    ( HAND_REMOTE,       A1,  INPIN,        "Battery",    'b' );
 PinPoint PumpPower  ( PUMP_CONTROLLER,    7,  SETTABLE,     "Power",      'P' );
-PinPoint WaterLevel ( PUMP_CONTROLLER,   64,  SONICPIN,     "Water",      'L',    4,    5 );
-PinPoint GateLevel  ( GATE_CONTROLLER,    6,  SETTABLE,     "Gate",       'G' );
+PinPoint WaterLevel ( PUMP_CONTROLLER,   64,  SONICPIN,     "Water",      'W',    4,    5 );
+PinPoint GateLevel  ( PUMP_CONTROLLER,    6,  PWM,          "Gate",       'G' );
 PinPoint ChemPump   ( CHEM_CONTROLLER,    7,  OUTPIN,       "Chem",       'C' );
 PinPoint PivotOnOff ( PIVOT_CONTROLLER,   7,  INPINHIGH,    "Pivot",      'P' );
-PinPoint PidControl ( PUMP_CONTROLLER    65,  USERCONTROL,  "W-G Pid",    'g' );
+PinPoint PidControl ( PUMP_CONTROLLER,   65,  USERCONTROL,  "[WG]Pid",    'g' );
 //^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
   // Hardware Assembly Pin Definitions
   #if THISDEVICE<6
     LiquidCrystal LCD(8, 9, 4, 5, 6, 7);
-    PinPoint Battery  ( HAND_REMOTE,       A1,  INPIN,     "Battery",   'B' );
-    #if RELEASE<20170525    //------- Release 2017.05.24
-      PinPoint Buzzer   ( HAND_REMOTE,        2,  BUZZPIN                     );
-    #else                   //------- Release 2017.06.30
-      PinPoint Buzzer   ( HAND_REMOTE,       11,  BUZZPIN                     );
-    #endif
   #else
     LiquidCrystal LCD(12, 13, 8, 9, 10, 11);
   #endif
+  #if RELEASE<20170525    //------- Release 2017.05.24
+    PinPoint Buzzer   ( HAND_REMOTE,        2,  BUZZPIN                     );
+  #else                   //------- Release 2017.06.30
+    PinPoint Buzzer   ( HAND_REMOTE,       11,  BUZZPIN                     );
+  #endif
+
   
 RemoteMenu Menu(&LCD);
 void setup() {
-  
   #if RELEASE<20170525 && THISDEVICE<6
     Menu.Setup(THISDEVICE, XBEECONFIG, 12, 11 ); // Force Rx,Tx to 12, 11
   #else
@@ -76,23 +76,18 @@ void setup() {
   //^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 
-
+//Controls(_OutPin, _ControlType, _ID, OnDevice, Kp, Ki, Kd, POn, PIDDirection, _StorePin = NULL)
   //----------------------------------------------------------------------------------------
   //vvvvvvvvvvvvvvvvvv[[[  PIN CONTROLS  ]]]vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
+  // OnDevice = The Device this Controller should execute on - if not specified runs on ALL
+  // StorePin = A virtual pin that stores the user setpoint; allows remote settings of local control
   //----------------------------------------------------------------------------------------
   // ControlTypes { SET_PIN, PID_SET, DIRECTLY, LESS_THAN, GREATER_THAN, EQUAL_TO, NOT_EQUAL_TO };
-  //----------------------- PIN --------- ControlType-------ID----|StorePin|-
-
-  WaterLevel.Controls  (  &GateLevel,     PID_SET,          'g'           );
-  PivotOnOff.Controls  (  &ChemPump,      DIRECTLY,         'e'           );
-  //^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-
-  // Hardware Assembly default Controls for Hand-Held Remote Units ( 1-5 )
-  #if THISDEVICE<6
-    Battery.Controls     (  &Buzzer,        LESS_THAN,        'b'           );
-    Menu.AddPin(&Battery);
-  #endif
+  //----------------------- PIN --------- ControlType-------ID----|OnDevice|----|StorePin|--
+  WaterLevel.Controls  (  &GateLevel,     PID_SET,          'g',  PUMP_CONTROLLER, 1, 1, 1, P_ON_M, REVERSE,  &PidControl    );
+  PivotOnOff.Controls  (  &ChemPump,      DIRECTLY,         'e',  PIVOT_CONTROLLER        );
+  //------------------------------[ buzzer ]------------------------------------------------
+  Battery.Controls     (  &Buzzer,        LESS_THAN,        'b',  HAND_REMOTE             );
 
   //----------------------------------------------------------------------------------------
   //vvvvvvvvvvvvvvvvvv[[[  MENU PINS  ]]]vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
@@ -101,6 +96,10 @@ void setup() {
   Menu.AddPin(&WaterLevel);
   Menu.AddPin(&GateLevel);
   Menu.AddPin(&ChemPump);
+#if THISDEVICE<6              // Menu items only on a Hand-Remote
+  Menu.AddPin(&PidControl);
+  Menu.AddPin(&Battery);
+#endif
   Menu.Begin(&PumpPower);
   //^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 }

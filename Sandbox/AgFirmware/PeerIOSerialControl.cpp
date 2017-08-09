@@ -272,7 +272,9 @@ void PeerIOSerialControl::ProcessPacket() {
         DB(("analogRead("));DB((pin));DBL((")"));
         if ( pin > 63 && pin < 128 ) { 
           val = ValueTo7bits(iVirtualPin[pin-64]); 
-        } else { 
+        } else if ( pin < A0 ) { 
+          val = ValueTo7bits(analogReadOutput(pin));
+        } else {
           val = ValueTo7bits(analogRead(pin)); 
         }
         Bytes[2] = lowByte(val);
@@ -321,5 +323,175 @@ bool PeerIOSerialControl::Available() {
       }
     }
   }
+}
+
+//-----------------------------------------------------------------------------------------------------
+// analogReadOutput(uint8_t pin)
+//-----------------------------------------------------------------------------------------------------
+int PeerIOSerialControl::analogReadOutput(uint8_t pin) {
+    // Below is a modified copy of \Arduino\hardware\arduino\avr\cores\arduino\wiring_analog.c
+    switch(digitalPinToTimer(pin)) {
+      #if defined(TCCR0) && defined(COM00) && !defined(__AVR_ATmega8__)
+      case TIMER0A:
+        // connect pwm to pin on timer 0
+        if (TCCR0 & (1 << COM00)) { return OCR0; } // PWM active
+        else { return 255 * digitalRead(pin); }
+        break;
+      #endif
+
+      #if defined(TCCR0A) && defined(COM0A1)
+      case TIMER0A:
+        // connect pwm to pin on timer 0, channel A
+        if (TCCR0A & (1 << COM0A1)) { return OCR0A; } // PWM active
+        else { return 255 * digitalRead(pin); }
+        break;
+      #endif
+
+      #if defined(TCCR0A) && defined(COM0B1)
+      case TIMER0B:
+        // connect pwm to pin on timer 0, channel B
+        if (TCCR0A & (1 << COM0B1)) { return OCR0B; } // PWM active
+        else { return 255 * digitalRead(pin); }
+        break;
+      #endif
+
+      #if defined(TCCR1A) && defined(COM1A1)
+      case TIMER1A:
+        // connect pwm to pin on timer 1, channel A
+        if (TCCR1A & (1 << COM1A1)) { return OCR1A; } // PWM active
+        else { return 255 * digitalRead(pin); }
+        break;
+      #endif
+
+      #if defined(TCCR1A) && defined(COM1B1)
+      case TIMER1B:
+        // connect pwm to pin on timer 1, channel B
+        if (TCCR1A & (1 << COM1B1)) { return OCR1B; } // PWM active
+        else { return 255 * digitalRead(pin); }
+        break;
+      #endif
+
+      #if defined(TCCR1A) && defined(COM1C1)
+      case TIMER1C:
+        // connect pwm to pin on timer 1, channel B
+        if (TCCR1A & (1 << COM1C1)) { return OCR1C; } // PWM active
+        else { return 255 * digitalRead(pin); }
+        break;
+      #endif
+
+      #if defined(TCCR2) && defined(COM21)
+      case TIMER2:
+        // connect pwm to pin on timer 2
+        if (TCCR2 & (1 << COM21)) { return OCR2; } // PWM active
+        else { return 255 * digitalRead(pin); }
+        break;
+      #endif
+
+      #if defined(TCCR2A) && defined(COM2A1)
+      case TIMER2A:
+        // connect pwm to pin on timer 2, channel A
+        if (TCCR2A & (1 << COM2A1)) { return OCR2A; } // PWM active
+        else { return 255 * digitalRead(pin); }
+        break;
+      #endif
+
+      #if defined(TCCR2A) && defined(COM2B1)
+      case TIMER2B:
+        // connect pwm to pin on timer 2, channel B
+        if (TCCR2A & (1 << COM2B1)) { return OCR2B; } // PWM active
+        else { return 255 * digitalRead(pin); }
+        break;
+      #endif
+
+      #if defined(TCCR3A) && defined(COM3A1)
+      case TIMER3A:
+        // connect pwm to pin on timer 3, channel A
+        if (TCCR3A & (1 << COM3A1)) { return OCR3A; } // PWM active
+        else { return 255 * digitalRead(pin); }
+        break;
+      #endif
+
+      #if defined(TCCR3A) && defined(COM3B1)
+      case TIMER3B:
+        // connect pwm to pin on timer 3, channel B
+        if (TCCR3A & (1 << COM3B1)) { return OCR3B; } // PWM active
+        else { return 255 * digitalRead(pin); }
+        break;
+      #endif
+
+      #if defined(TCCR3A) && defined(COM3C1)
+      case TIMER3C:
+        // connect pwm to pin on timer 3, channel C
+        if (TCCR3A & (1 << COM3C1)) { return OCR3C; } // PWM active
+        else { return 255 * digitalRead(pin); }
+        break;
+      #endif
+
+      #if defined(TCCR4A)
+      case TIMER4A:
+        //connect pwm to pin on timer 4, channel A
+        if (TCCR4A & (1 << COM4A1)) { return OCR4A; }
+        #if defined(COM4A0)   // only used on 32U4
+        else if (TCCR4A & (1 << COM4A0)) { return OCR4A; }
+        #endif
+        else { return 255 * digitalRead(pin); }
+        break;
+      #endif
+      
+      #if defined(TCCR4A) && defined(COM4B1)
+      case TIMER4B:
+        // connect pwm to pin on timer 4, channel B
+        if (TCCR4A & (1 << COM4B1)) { return OCR4B; } // PWM active
+        else { return 255 * digitalRead(pin); }
+        break;
+      #endif
+
+      #if defined(TCCR4A) && defined(COM4C1)
+      case TIMER4C:
+        // connect pwm to pin on timer 4, channel C.
+        if (TCCR4A & (1 << COM4C1)) { return OCR4C; } // PWM active
+        else { return 255 * digitalRead(pin); }
+        break;
+      #endif
+        
+      #if defined(TCCR4C) && defined(COM4D1)
+      case TIMER4D:       
+        // connect pwm to pin on timer 4, channel D
+        if (TCCR4C & (1 << COM4D1)) { return OCR4D; } // PWM active
+        #if defined(COM4D0)   // only used on 32U4
+        else if (TCCR4C & (1 << COM4D0)) { return OCR4D; } // PWM active
+        #endif
+        else { return 255 * digitalRead(pin); }
+        break;
+      #endif
+
+              
+      #if defined(TCCR5A) && defined(COM5A1)
+      case TIMER5A:
+        // connect pwm to pin on timer 5, channel A
+        if (TCCR5A & (1 << COM5A1)) { return OCR5A; } // PWM active
+        else { return 255 * digitalRead(pin); }
+        break;
+      #endif
+
+      #if defined(TCCR5A) && defined(COM5B1)
+      case TIMER5B:
+        // connect pwm to pin on timer 5, channel B
+        if (TCCR5A & (1 << COM5B1)) { return OCR5B; } // PWM active
+        else { return 255 * digitalRead(pin); }
+        break;
+      #endif
+
+      #if defined(TCCR5A) && defined(COM5C1)
+      case TIMER5C:
+        // connect pwm to pin on timer 5, channel C
+        if (TCCR5A & (1 << COM5C1)) { return OCR5C; } // PWM active
+        else { return 255 * digitalRead(pin); }
+        break;
+      #endif
+
+      default:
+        return -1;
+    }
 }
 

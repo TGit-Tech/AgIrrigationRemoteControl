@@ -6,6 +6,7 @@
  **********************************************************************************************************************/
 #include "UserControl.h"
 
+// Initialize Static Variables
 unsigned int  UserControl::NextEpromOffset = 0;
 char          UserControl::OnControls[16] = {};
 int           UserControl::ObjectCount = 0;
@@ -27,19 +28,13 @@ int           UserControl::ObjectCount = 0;
  * @endcode
 **********************************************************************************************************************/
 UserControl::UserControl(PinPoint * _InPin, eControlType _ControlType, PinPoint * _OutPin, char _ID, PinPoint * _StorePin = NULL) {
-  DB(("UserControl::UserControl("));DB((_InPin->Name));DBC;DB((_OutPin->Name));DBC;DB((_ID));DB((")"));
+  DB(("UserControl::UserControl("));DB((_InPin->Name));DBC;DB((_ControlType));DBC;DB((_OutPin->Name));DBC;DB((_ID));DB((")"));
 
   InPin = _InPin;
   ControlType = _ControlType;
   OutPin = _OutPin;
   ID = _ID;
   StorePin = _StorePin;
-  
-  if ( ControlType == PID_SET ) {
-    PIDControl = new PID(&PIDInput, &PIDOutput, &PIDSetpoint, Kp, Ki, Kd, POn, PIDDirection );
-    PIDControl->SetOutputLimits(1,1023);
-    PIDControl->SetMode(MANUAL);
-  }
 
   //------------ Assign EEPROM Offset for this User Control and Retreive values ---------------------
   EpromOffset = NextEpromOffset;
@@ -62,6 +57,22 @@ UserControl::UserControl(PinPoint * _InPin, eControlType _ControlType, PinPoint 
   if (ObjectCount<15) ObjectCount++;                  // Stay within boundaries
   if ( Status == ISON ) OnControls[ObjectIndex] = ID;
   DB((" @ObjectIndex="));DBL((ObjectIndex));
+}
+
+/******************************************************************************************************************//**
+ * @brief Creates a new PID Control ( Constructor )
+ * @remarks
+ * @code
+ *   exmaple code
+ * @endcode
+**********************************************************************************************************************/
+UserControl::UserControl(PinPoint * _InPin, eControlType _ControlType, PinPoint * _OutPin, char _ID, double Kp, double Ki, double Kd, int POn, int PIDDirection, PinPoint * _StorePin = NULL)
+: UserControl(_InPin, _ControlType, _OutPin, _ID, _StorePin) {
+  if ( _ControlType == PID_SET ) {
+    PIDControl = new PID(&PIDInput, &PIDOutput, &PIDSetpoint, Kp, Ki, Kd, POn, PIDDirection );
+    PIDControl->SetOutputLimits(0,255);
+    PIDControl->SetMode(MANUAL);
+  }
 }
 
 /******************************************************************************************************************//**
@@ -107,8 +118,13 @@ void UserControl::Apply() {
       if ( PIDControl != NULL ) {
         PIDInput = double(InputValue);
         PIDSetpoint = double(Setpoint);
-        PIDControl->Compute();
+        unsigned long now=millis();
+        PIDControl->SetSampleTime( now - PIDLastCompute );
+        PIDLastCompute = now;
+        if ( !PIDControl->Compute() ) DBL(("UserControl::Apply(PID_SET - No Compute)"));
         OutPin->SetTo(PIDOutput);
+        DB(("UserControl::Apply(PID_SET - PID is ON="));DB((PIDControl->GetMode()));DBL((")"));
+        DB(("UserControl::Apply(PID_SET,"));DB((PIDInput));DBC;DB((Setpoint));DBC;DB((PIDOutput));DBL((")"));
       }
       break;
   }
@@ -148,7 +164,9 @@ void UserControl::SetPointAdd(int AddValue) {
     } else if ( AddValue > 0 ) {
       while ( InPin->ModifyValue(Setpoint) < ModStart + AddValue ) { Setpoint++; }
     }
+    if ( Setpoint < 0 ) Setpoint = 0;
   }
+  if ( StorePin != NULL ) StorePin->SetTo(Setpoint, Status);
 }
 
 /******************************************************************************************************************//**
@@ -163,7 +181,13 @@ void UserControl::SetPointAdd(int AddValue) {
 void UserControl::IsOn(bool _IsOn) {
   DB(("UserControl::IsOn("));DB((_IsOn));DBL((")"));
 
-  if ( _IsOn ) { Status = ISON; } else { Status = ISOFF; }
+  if ( _IsOn ) { 
+    Status = ISON; 
+    if ( ControlType == PID_SET ) PIDControl->SetMode(AUTOMATIC);
+  } else { 
+    Status = ISOFF;
+    if ( ControlType == PID_SET ) PIDControl->SetMode(MANUAL); 
+  }
   if ( StorePin != NULL ) OutPin->SetTo(Setpoint, Status);
   if ( Status == ISON && ID != NULL ) { OnControls[ObjectIndex] = ID; } 
   else { OnControls[ObjectIndex] = ' '; }
