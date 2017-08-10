@@ -1,6 +1,6 @@
 /******************************************************************************************************************//**
  * @file PinPoint.h
- * @brief Class definition for PinPoint used for I/O Control of a Pin on a Device
+ * @brief UserControl ( Input->Controls(ThrewUserSetting)->Output )
  * @authors 
  *    tgit23        8/2017       Original
  **********************************************************************************************************************/
@@ -11,9 +11,7 @@
 #include "PID_v1.h"         // see https://playground.arduino.cc/Code/PIDLibrary
 #include <EEPROM.h>
 
-//typedef enum PinStatus { ISOFF = 0, ISON = 1, WAIT = 2, ERR = 3, OKAY = 4 };
-//typedef enum eControlType { SET_PIN, PID_SET, CONNECT_TO, LESS_THAN, GREATER_THAN, EQUAL_TO, NOT_EQUAL_TO };
-
+//PeerIOSerialControl::enum PinStatus { ISOFF = 0, ISON = 1, WAIT = 2, ERR = 3, OKAY = 4 };
 #ifndef _ECONTROL
 typedef enum eControlType { SET_PIN, PID_SET, DIRECTLY, LESS_THAN, GREATER_THAN, EQUAL_TO, NOT_EQUAL_TO };
 #define _ECONTROL
@@ -47,11 +45,13 @@ class UserControl {
     int             Setpoint = 0;
     unsigned int    EpromOffset = 0;
     
-    
+    // InPin->ControlType->OutPin
+    // Optionally; Save User Setpoint/Settings on a 'StorePin'
     PinPoint        *InPin = NULL;
     PinPoint        *OutPin = NULL;
     PinPoint        *StorePin = NULL;
 
+    // PID specific variables
     PID             *PIDControl = NULL;
     double          PIDInput = 0;
     double          PIDOutput = 0;

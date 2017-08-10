@@ -71,12 +71,12 @@ UserControl::UserControl(PinPoint * _InPin, eControlType _ControlType, PinPoint 
   if ( _ControlType == PID_SET ) {
     PIDControl = new PID(&PIDInput, &PIDOutput, &PIDSetpoint, Kp, Ki, Kd, POn, PIDDirection );
     PIDControl->SetOutputLimits(0,255);
-    PIDControl->SetMode(MANUAL);
+    if ( Status == ISON ) { PIDControl->SetMode(AUTOMATIC); } else { PIDControl->SetMode(MANUAL); }
   }
 }
 
 /******************************************************************************************************************//**
- * @brief Applies the Control - Output ( Driven ) Pin
+ * @brief Applies the selected Control - Drives the Output Pin
  * @remarks
  * @code
  *   exmaple code
@@ -121,10 +121,13 @@ void UserControl::Apply() {
         unsigned long now=millis();
         PIDControl->SetSampleTime( now - PIDLastCompute );
         PIDLastCompute = now;
-        if ( !PIDControl->Compute() ) DBL(("UserControl::Apply(PID_SET - No Compute)"));
-        OutPin->SetTo(PIDOutput);
-        DB(("UserControl::Apply(PID_SET - PID is ON="));DB((PIDControl->GetMode()));DBL((")"));
-        DB(("UserControl::Apply(PID_SET,"));DB((PIDInput));DBC;DB((Setpoint));DBC;DB((PIDOutput));DBL((")"));
+        if ( PIDControl->Compute() ) { OutPin->SetTo(PIDOutput); }
+        else { DBL(("UserControl::Apply(PID_SET - No Compute)")); }
+
+        // Debug message
+        DB(("UserControl::Apply(PID_SET,"));DB((PIDInput));DBC;DB((Setpoint));DBC;DB((PIDOutput));DBC;
+        if ( PIDControl->GetMode() == AUTOMATIC ) { DB(("AUTOMATIC")); } else { DB(("MANUAL")); }
+        DBL((")"));
       }
       break;
   }
@@ -139,7 +142,7 @@ void UserControl::Apply() {
 **********************************************************************************************************************/
 void UserControl::SetPoint(int _Set) {
   Setpoint = _Set;
-  if ( StorePin != NULL ) StorePin->SetTo(Setpoint);
+  if ( StorePin != NULL ) StorePin->SetTo(Setpoint, Status);
 }
 int UserControl::SetPoint() {
   return Setpoint;

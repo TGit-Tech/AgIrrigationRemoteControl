@@ -43,13 +43,15 @@ PinPoint::PinPoint(uint8_t _Device, uint8_t _Pin, ePinType _PinType, char *_Name
   }
 
   // Set the pinMode
-  switch ( PinType ) {
-    case INPIN:       pinMode(Pin,INPUT);break;
-    case INPINHIGH:   pinMode(Pin,INPUT_PULLUP);break;
-    case OUTPIN:      pinMode(Pin,OUTPUT);break;
-    case BUZZPIN:     pinMode(Pin,OUTPUT);break;
-    case SETTABLE:    pinMode(Pin,OUTPUT);break;
-    case PWM:         pinMode(Pin,OUTPUT);break;
+  if ( Device == ThisDeviceID ) {
+    switch ( PinType ) {
+      case INPIN:       pinMode(Pin,INPUT);break;
+      case INPINHIGH:   pinMode(Pin,INPUT_PULLUP);break;
+      case OUTPIN:      pinMode(Pin,OUTPUT);break;
+      case BUZZPIN:     pinMode(Pin,OUTPUT);break;
+      case SETTABLE:    pinMode(Pin,OUTPUT);break;
+      case PWM:         pinMode(Pin,OUTPUT);break;
+    }
   }
 }
 //---------------------------------------------------------------------------------------------------------------------
@@ -64,9 +66,11 @@ PinPoint::PinPoint(uint8_t _Device, uint8_t _Pin, ePinType _PinType )
 //---------------------------------------------------------------------------------------------------------------------
 PinPoint::PinPoint(uint8_t _Device, uint8_t _Pin, ePinType _PinType, char *_Name, char _ID, uint8_t _TrigPin, uint8_t _EchoPin )
 :PinPoint(_Device, _Pin, _PinType, _Name, _ID ) { 
-  pinMode(_TrigPin, OUTPUT);
-  pinMode(_EchoPin, INPUT);
-  Sonar = new NewPing(_TrigPin, _EchoPin, 400);
+  if ( Device == ThisDeviceID ) {
+    pinMode(_TrigPin, OUTPUT);
+    pinMode(_EchoPin, INPUT);
+    Sonar = new NewPing(_TrigPin, _EchoPin, 400);
+  }
 }
 
 /******************************************************************************************************************//**
@@ -80,14 +84,13 @@ PinPoint::PinPoint(uint8_t _Device, uint8_t _Pin, ePinType _PinType, char *_Name
  * @endcode
 **********************************************************************************************************************/
 void PinPoint::ReadValue(bool _ForceBlocking = false) {
-  DB(("PinPoint::ReadValue(Blocking="));DB((_ForceBlocking));DBL((")"));
+  DB(("PinPoint::ReadValue(")); if ( _ForceBlocking ) { DB(("Blocking"));DBC; }
+  DB(("Device="));DB((Device));DBC;DB(("Pin="));DB((Pin));DBL((")"));
 
   mStatus = ERR; mPacketID = -1;
   if ( Device > 16 || Pin > 127 ) return;    // Value Check
   
   if ( Device == ThisDeviceID ) {                         //--- Local Pin Read ---
-    DB(("LOCAL Get: Device="));DB((Device));DB((" Pin="));DBL((Pin));
-    
     if ( PinType == SONICPIN ) {                          // SonicPin Only works on local device
       if ( Sonar != NULL ) {
         mValue = Sonar->ping_in();                        // Measure the Distance
@@ -99,22 +102,22 @@ void PinPoint::ReadValue(bool _ForceBlocking = false) {
     else if ( Pin >= A0 ) { mValue = analogRead(Pin); }
     else { mValue = digitalRead(Pin); }
     if ( mValue != -1 ) { mStatus = OKAY; ApplyControls(); }
+    DB(("PinPoint::ReadValue LOCAL="));DBL((mValue));
   }
   else if ( _ForceBlocking ) {
-    DB(("REMOTE Blocked Get: Device="));DB((Device));DB((" Pin="));DBL((Pin));
     if ( Device != XBee->TargetArduinoID() ) XBee->TargetArduinoID( Device ); //Set TransceiverID
     if ( Pin >= A0 || PinType == PWM ) { mValue = XBee->analogReadB(Pin); }
     else { mValue = XBee->digitalReadB(Pin); }
     if ( mValue != -1 ) { mStatus = OKAY; ApplyControls(); }
-    DB(("REMOTE Blocked Got: Value="));DBL((mValue));
+    DB(("PinPoint::ReadValue BLOCKED="));DBL((mValue));
   }
   else {                                                        //--- Remote Pin Read ---
-    DB(("REMOTE Get: Device="));DB((Device));DB((" Pin="));DBL((Pin));
     if ( Device != XBee->TargetArduinoID() ) XBee->TargetArduinoID( Device ); //Set TransceiverID
     mWaitStart = millis();
     if ( Pin >= A0 || PinType == PWM || PinType == USERCONTROL ) { mPacketID = XBee->analogReadNB(Pin); }
     else { mPacketID = XBee->digitalReadNB(Pin); }
     mStatus = WAIT;
+    DBL(("PinPoint::ReadValue REQUESTED"));
   }  
 }
 
