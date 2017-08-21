@@ -11,143 +11,145 @@
 #include "PinPoint.h"
 #include "UserControl.h"
 
-#if DEBUG>0                                 // Activate Debug Messages ( DEBUG defined in PeerRemoteMenu.h )
+#if DEBUG>0                             // Activate Debug Messages ( DEBUG defined in PeerRemoteMenu.h )
   #define DBL(x) Serial.println x
+  #define DBFL(x) Serial.println F(x)
   #define DB(x) Serial.print x
-  #define DBC Serial.print(", ")
-#else                                       // ELSE - Clear Debug Messages
+  #define DBF(x) Serial.print F(x)
+  #define DBC Serial.print(F(", "))
+#else                                   // ELSE - Clear Debug Messages
   #define DBL(x)
+  #define DBFL(x)
   #define DB(x)
+  #define DBF(x)
   #define DBC  
 #endif
 
 PeerIOSerialControl *PinPoint::XBee = NULL; // Static XBee for all PinPoints
-uint8_t PinPoint::ThisDeviceID = 0;         // ThisDevice Identification Num for all PinPoints
+//---------------------------------------------------------------------------------------------------------------------
+// Constructor
+//---------------------------------------------------------------------------------------------------------------------
+PinPoint::PinPoint(uint8_t *_Device, uint8_t *_Pin, char *_DeviceName) {
+  Device = _Device;
+  Pin = _Pin;
+  DeviceName = _DeviceName;
+}
 
-/******************************************************************************************************************//**
- * @brief Default Constructor
- * @remarks
- * @code
- *   exmaple code
- * @endcode
-**********************************************************************************************************************/
-PinPoint::PinPoint(uint8_t _Device, uint8_t _Pin, ePinType _PinType, char *_Name, char _ID ) {
+//---------------------------------------------------------------------------------------------------------------------
+// Mode()
+//---------------------------------------------------------------------------------------------------------------------
+void PinPoint::Mode(uint8_t _Mode) {
+  PinMode = _Mode;
   
-  // Assign Variables
-  Device = _Device; Pin = _Pin; PinType = _PinType; Name = _Name; ID = _ID;  
-  
-  // Set whether pin is On/Off value and auto-create a SET_PIN control for pins that need set
-  if ( Pin <= A0 && PinType != PWM ) IsOnOff = true;  
-  if ( PinType == SETTABLE || PinType == USERCONTROL || PinType == PWM ) {
-    FirstControl = new UserControl( this, SET_PIN, this, ID );
+  if ( !Device ) return; // Set pinMode() if Local device
+  switch ( PinMode ) {
+    case INPUT:           pinMode(Pin, INPUT);IsOnOff = ( Pin < A0 ); break;
+    case INPUT_PULLUP:    pinMode(Pin, INPUT_PULLUP);IsOnOff = ( Pin < A0 ); break;
+    case OUTPUT:          pinMode(Pin, OUTPUT);IsOnOff = ( Pin < A0 ); break;
+    case INPUT_SONIC:     break;
+    case OUTPUT_BUZZER:   pinMode(Pin, OUTPUT);break;
+    case OUTPUT_PWM:      pinMode(Pin, OUTPUT);break;
+    case CONTROLLER:      break;
   }
+}
 
-  // Set the pinMode
-  if ( Device == ThisDeviceID ) {
-    switch ( PinType ) {
-      case INPIN:       pinMode(Pin,INPUT);break;
-      case INPINHIGH:   pinMode(Pin,INPUT_PULLUP);break;
-      case OUTPIN:      pinMode(Pin,OUTPUT);break;
-      case BUZZPIN:     pinMode(Pin,OUTPUT);break;
-      case SETTABLE:    pinMode(Pin,OUTPUT);break;
-      case PWM:         pinMode(Pin,OUTPUT);break;
+void PinPoint::Mode(uint8_t _Mode, char *_Name ) {
+  Mode(_Mode);
+  Name = _Name;
+}
+
+void PinPoint::Mode(uint8_t _Mode, char *_Name, uint8_t _TrigPin, uint8_t _EchoPin) {
+  Mode(_Mode);
+  Name = _Name;
+  if ( !Device ) {                  // Create Sonar if on local device
+    if ( _Mode == INPUT_SONIC ) {
+      pinMode(_TrigPin, OUTPUT);
+      pinMode(_EchoPin, INPUT);
+      Sonar = new NewPing(_TrigPin, _EchoPin, 400);
     }
   }
 }
-//---------------------------------------------------------------------------------------------------------------------
-// Constructor - No-Name and No-ID ( A pin NOT for Menu usage )
-//---------------------------------------------------------------------------------------------------------------------
-PinPoint::PinPoint(uint8_t _Device, uint8_t _Pin, ePinType _PinType )
-:PinPoint(_Device, _Pin, _PinType, NULL, NULL ) {
-}
-
-//---------------------------------------------------------------------------------------------------------------------
-// UltraSonic Special Constructor - uses two pins for one value
-//---------------------------------------------------------------------------------------------------------------------
-PinPoint::PinPoint(uint8_t _Device, uint8_t _Pin, ePinType _PinType, char *_Name, char _ID, uint8_t _TrigPin, uint8_t _EchoPin )
-:PinPoint(_Device, _Pin, _PinType, _Name, _ID ) { 
-  if ( Device == ThisDeviceID ) {
-    pinMode(_TrigPin, OUTPUT);
-    pinMode(_EchoPin, INPUT);
-    Sonar = new NewPing(_TrigPin, _EchoPin, 400);
-  }
-}
-
+   
 /******************************************************************************************************************//**
  * @brief Reads the Value and stores it; Value is then gotten by calling GetRawValue() or GetModifiedValue()
  * @remarks
- * - Automatically calls ApplyControls() if a valid value is gotten
  * @code
  *   APin.ReadValue();
- *   while ( APin.Status() == WAIT ) { // Loop Till Value is Retreived }
+ *   while ( APin.Status() == WAIT ) { // Loop Till Value is Retreivable }
  *   GottenValue = APin.GetValue();
  * @endcode
 **********************************************************************************************************************/
 void PinPoint::ReadValue(bool _ForceBlocking = false) {
-  DB(("PinPoint::ReadValue(")); if ( _ForceBlocking ) { DB(("Blocking"));DBC; }
-  DB(("Device="));DB((Device));DBC;DB(("Pin="));DB((Pin));DBL((")"));
+  DB((F("PinPoint::ReadValue("))); if ( _ForceBlocking ) { DB((F("Blocking")));DBC; }
+  DB((F("Device=")));DB((int(Device)));DBC;DB((F("Pin=")));DB((int(Pin)));DBL((")"));
 
-  mStatus = ERR; mPacketID = -1;
+  mStatus = ERR; mPacketID = -1; 
   if ( Device > 16 || Pin > 127 ) return;    // Value Check
+  State = WAIT;
   
-  if ( Device == ThisDeviceID ) {                         //--- Local Pin Read ---
-    if ( PinType == SONICPIN ) {                          // SonicPin Only works on local device
+  if ( !Device ) {                         //--- Local Pin Read ---
+    if ( PinMode == INPUT_SONIC ) {                          // SonicPin Only works on local device
       if ( Sonar != NULL ) {
         mValue = Sonar->ping_in();                        // Measure the Distance
         if ( mValue != -1 ) mStatus = OKAY;               
         XBee->VirtualPin(Pin, mValue);                    // Record distance on the Virtual Pin
       }
     }
-    else if ( PinType == PWM ) { mValue = XBee->analogReadOutput(Pin); }
+    else if ( PinMode == OUTPUT_PWM ) { mValue = XBee->analogReadOutput(Pin); }
     else if ( Pin >= A0 ) { mValue = analogRead(Pin); }
     else { mValue = digitalRead(Pin); }
-    if ( mValue != -1 ) { mStatus = OKAY; ApplyControls(); }
-    DB(("PinPoint::ReadValue LOCAL="));DBL((mValue));
+    if ( mValue != -1 ) { mStatus = OKAY; }
+    DB((F("PinPoint::ReadValue LOCAL=")));DBL((mValue));
+    State = READY;
   }
   else if ( _ForceBlocking ) {
     if ( Device != XBee->TargetArduinoID() ) XBee->TargetArduinoID( Device ); //Set TransceiverID
-    if ( Pin >= A0 || PinType == PWM ) { mValue = XBee->analogReadB(Pin); }
+    if ( Pin >= A0 || PinMode ==OUTPUT_PWM ) { mValue = XBee->analogReadB(Pin); }
     else { mValue = XBee->digitalReadB(Pin); }
-    if ( mValue != -1 ) { mStatus = OKAY; ApplyControls(); }
-    DB(("PinPoint::ReadValue BLOCKED="));DBL((mValue));
+    if ( mValue != -1 ) { mStatus = OKAY; }
+    DB((F("PinPoint::ReadValue BLOCKED=")));DBL((mValue));
+    State = READY;
   }
   else {                                                        //--- Remote Pin Read ---
     if ( Device != XBee->TargetArduinoID() ) XBee->TargetArduinoID( Device ); //Set TransceiverID
     mWaitStart = millis();
-    if ( Pin >= A0 || PinType == PWM || PinType == USERCONTROL ) { mPacketID = XBee->analogReadNB(Pin); }
+    if ( Pin >= A0 || PinMode ==OUTPUT_PWM || PinMode == CONTROLLER ) { mPacketID = XBee->analogReadNB(Pin); }
     else { mPacketID = XBee->digitalReadNB(Pin); }
-    mStatus = WAIT;
-    DBL(("PinPoint::ReadValue REQUESTED"));
+    DBL((F("PinPoint::ReadValue REQUESTED")));
   }  
 }
 
 /******************************************************************************************************************//**
  * @brief Checks XBee communications and returns 'true' if the pin Status has changed
  * @remarks
- * - Automatically calls ApplyControls() if value is available
  * @code
  *   exmaple code
  * @endcode
 **********************************************************************************************************************/
-bool PinPoint::UpdateAvailable() {
+eState PinPoint::GetState() {
   XBee->Available();
-  if ( mStatus == WAIT ) {
+  if ( State == WAIT ) {
+    // Check GetReply()
     if ( mPacketID != -1 ) {
       int Ret = XBee->GetReply(mPacketID);
-      if ( Ret != -1 ) {
-        mValue = Ret;
-        mStatus = OKAY;
-        ApplyControls();
-        return true;
-      }
+      if ( Ret != -1 ) { mValue = Ret; mStatus = OKAY; State = READY; }
     }
-    if ( millis() - mWaitStart > XBee->Timeout() ) {
-      mPacketID = -1;
-      mStatus = ERR;
-      return true;
-    }
+    // Timeout
+    if ( millis() - mWaitStart > XBee->Timeout() ) { mPacketID = -1; mStatus = ERR; State = READY; }
   }
-  return false;  
+  /* Debug
+  switch ( State ) {
+    case WAIT:      DBFL(("PinPoint::GetState(WAIT)"));break;
+    case READY:     DBFL(("PinPoint::GetState(READY)"));break;
+    case SETTING:   DBFL(("PinPoint::GetState(SETTING)"));break;
+    case COMPLETE:  DBFL(("PinPoint::GetState(COMPLETE)"));break;
+  }
+  */
+  return State;
+}
+
+void PinPoint::SetState(eState _State) {
+  State = _State;
 }
 
 /******************************************************************************************************************//**
@@ -200,26 +202,26 @@ int PinPoint::ModifyValue(int _Value) {
  * @endcode
 **********************************************************************************************************************/
 void PinPoint::SetTo(unsigned int _Value, PinStatus _Status = OKAY) {
-  DB(("PinPoint::SetTo("));DB((Device));DBC;DB((Pin));DBC;DB((_Value));DBL((")"));
+  DB((F("PinPoint::SetTo(")));DB((int(Device)));DBC;DB((int(Pin)));DBC;DB((_Value));DBL((")"));
 
   if ( Device > 16 || Pin > 127 ) return;    // Value Check
 
   // Drive Buzzer
-  if ( PinType == BUZZPIN ) {
+  if ( PinMode == OUTPUT_BUZZER ) {
     if (_Value < 1) { noTone(Pin); }
     else { tone(Pin, _Value); }
   }
 
   // Drive Local Pin
-  else if ( Device == ThisDeviceID ) {                                          // Drive a LOCAL Pin
+  else if ( !Device ) {                                          // Drive a LOCAL Pin
     if ( Pin > 63 ) { XBee->VirtualPin(Pin, _Value, _Status); }                 // Drive a Virtual Pin
     else {
-      if ( Pin >= A0 || PinType == PWM ) { 
+      if ( Pin >= A0 || PinMode == OUTPUT_PWM ) { 
         analogWrite(Pin, _Value); 
-        DB(("PinPoint::SetTo - analogWrite("));DB((Pin));DBC;DB((_Value));DBL((")"));
+        DB((F("PinPoint::SetTo - analogWrite(")));DB((int(Pin)));DBC;DB((_Value));DBL((")"));
       } else { 
         digitalWrite(Pin, _Value);
-        DB(("PinPoint::SetTo - digitalWrite("));DB((Pin));DBC;DB((_Value));DBL((")"));
+        DB((F("PinPoint::SetTo - digitalWrite(")));DB((int(Pin)));DBC;DB((_Value));DBL((")"));
       }
     }
   }
@@ -228,8 +230,8 @@ void PinPoint::SetTo(unsigned int _Value, PinStatus _Status = OKAY) {
   else {
     if ( XBee == NULL ) return;
     if ( Device != XBee->TargetArduinoID() ) XBee->TargetArduinoID( Device );
-    if ( PinType == PWM ) { XBee->analogWriteB(Pin, _Value); }                  // Set the Remote Arduino PWM Pin
-    else if ( PinType == USERCONTROL ) { XBee->VirtualPin(Pin, _Value, _Status); }
+    if ( PinMode == OUTPUT_PWM ) { XBee->analogWriteB(Pin, _Value); }                  // Set the Remote ArduinoOUTPUT_PWM Pin
+    else if ( PinMode == CONTROLLER ) { XBee->VirtualPin(Pin, _Value, _Status); }
     else { XBee->digitalWriteB(Pin, _Value); }                                  // Set the Remote Arduino Digital Pin
   }
 }
@@ -246,56 +248,3 @@ void PinPoint::AttachValueModifier(int (*_ValueModifierCallback)(int)) {
   ValueModifierCallback = _ValueModifierCallback;
 }
 
-/******************************************************************************************************************//**
- * @brief Adds a 'UserControl' to the Controls Link-List
- * @remarks
- * @code
- *   exmaple code
- * @endcode
-**********************************************************************************************************************/
-void PinPoint::Controls(PinPoint* _OutPin, eControlType _ControlType, char _ID, uint8_t OnDevice = 0, PinPoint* _StorePin = NULL) {
-  if ( OnDevice == 0 || OnDevice == ThisDeviceID ) {
-    if ( FirstControl == NULL ) {
-      FirstControl = new UserControl( this, _ControlType, _OutPin, _ID, _StorePin );
-    } else {
-      UserControl *thisControl = FirstControl;
-      while ( thisControl->Next != NULL ) { thisControl = thisControl->Next; }
-      thisControl->Next = new UserControl( this, _ControlType, _OutPin, _ID, _StorePin );
-      thisControl->Next->Prev = thisControl;
-    }
-  }
-}
-
-/******************************************************************************************************************//**
- * @brief Adds a 'UserControl' to the Controls Link-List
- * @remarks
- * @code
- *   exmaple code
- * @endcode
-**********************************************************************************************************************/
-void PinPoint::ApplyControls() {
-  UserControl *thisControl = FirstControl;
-  while ( thisControl != NULL ) {
-    if ( thisControl->ControlType != SET_PIN ) thisControl->Apply();
-    thisControl = thisControl->Next;
-  }
-}
-/******************************************************************************************************************//**
- * @brief Adds a 'UserControl' to the Controls Link-List
- * @remarks
- * @code
- *   exmaple code
- * @endcode
-**********************************************************************************************************************/
-void PinPoint::Controls(PinPoint* _OutPin, eControlType _ControlType, char _ID, uint8_t OnDevice, double Kp, double Ki, double Kd, int POn, int PIDDirection, PinPoint * _StorePin = NULL) {
-  if ( OnDevice == 0 || OnDevice == ThisDeviceID ) {
-    if ( FirstControl == NULL ) {
-      FirstControl = new UserControl( this, _ControlType, _OutPin, _ID, Kp, Ki, Kd, POn, PIDDirection, _StorePin );
-    } else {
-      UserControl *thisControl = FirstControl;
-      while ( thisControl->Next != NULL ) { thisControl = thisControl->Next; }
-      thisControl->Next = new UserControl( this, _ControlType, _OutPin, _ID, Kp, Ki, Kd, POn, PIDDirection, _StorePin );
-      thisControl->Next->Prev = thisControl;
-    }
-  }
-}

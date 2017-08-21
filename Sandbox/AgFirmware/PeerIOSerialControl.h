@@ -35,7 +35,7 @@
 #define READ 1
 #define WRITE 0
 #define VPIN_STATUS_ON
-typedef enum PinStatus { ISOFF = 0, ISON = 1, WAIT = 2, ERR = 3, OKAY = 4 };
+typedef enum PinStatus : byte { ISOFF = 0, ISON = 1, ERR = 2, OKAY = 3 };  // Bits AV12 & AV13
 
 /**********************************************************************************************//**
  *  @class  PeerIOSerialControl
