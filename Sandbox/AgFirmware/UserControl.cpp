@@ -25,9 +25,12 @@ byte          UserControl::ObjectCount = 0;
   #define DBC  
 #endif
 
+//----------------------------------------------------------------------------------------------------------------------
+//                      [[ CREATE & SAVE ]]
+//----------------------------------------------------------------------------------------------------------------------
 /******************************************************************************************************************//**
  * @brief Create a new Control ( Constructor )
- * @remarks
+ * @remarks Sets the EEPROM storing location and retreives SetPoint values if they exist
  * @code
  *   exmaple code
  * @endcode
@@ -48,20 +51,20 @@ UserControl::UserControl(PinPoint *_InPin, LiquidCrystal *_LCD, char _ID ) {
     EEPROM.update( EpromOffset + 1, 0x00 );
     Setpoint = 0;
   } else {                                                // ELSE assign the Eprom Read values
-    Status = ((HiByte & 0x30) >> 4);                      // Bit 12 & 13 make Status
+    mStatus = ((HiByte & 0x30) >> 4);                     // Bit 12 & 13 make Status
     Setpoint = (int)(((HiByte & 0x0F) << 8) | LoByte);    // 0x0FFF 0->11-bits for value
   }
   NextEpromOffset = EpromOffset + 2;                      // Record the next available offset
 
   ObjectIndex = ObjectCount;                              // Assign an OnControls[ObjectIndex] & set to ID if ON
   if ( ObjectCount<15 ) ObjectCount++;                    // Stay within boundaries
-  if ( Status == ISON ) OnControls[ObjectIndex] = ID;
+  if ( Status() == ISON ) OnControls[ObjectIndex] = ID;
   DB((F(" @ObjectIndex=")));DBL((ObjectIndex));
 }
 
 /******************************************************************************************************************//**
- * @brief  Save the Controls 'Setpoint' to Eprom and VirtualPins
- * @remarks
+ * @brief Saves the Controls SetPoint and Status to EEPROM memory and Sets the ControlPin
+ * @remarks 
  *  @code
  *    exmaple code
  *  @endcode
@@ -71,14 +74,15 @@ void UserControl::Save() {
     
   // EEPROM - Save; Store the Value and Status as two bytes in Eprom
   byte LoByte = ((Setpoint >> 0) & 0xFF);
-  byte HiByte = ((Status << 4 & 0x30) | (Setpoint >> 8 & 0x0F));
+  byte HiByte = ((mStatus << 4 & 0x30) | (Setpoint >> 8 & 0x0F));
   EEPROM.update( EpromOffset, LoByte );
   EEPROM.update( (EpromOffset + 1), HiByte );
   DB((F("EEPROM.update( ")));DB((EpromOffset));DBC;DB((LoByte, HEX));DBL((F(")")));
   DB((F("EEPROM.update( ")));DB((EpromOffset + 1));DBC;DB((HiByte, HEX));DBL((F(")")));
 
   // VirtualPin - Save; If 'ControlPin' Exists - Save to a Virtual Pin
-  if ( ControlPin != NULL ) { ControlPin->SetTo(Setpoint, Status); }
+  if ( ControlPin != NULL ) { ControlPin->SetTo(Setpoint, mStatus); }
+  if ( ControlType == SET_CONTROLLER ) { Apply(true); } // Save to Virtual Pin
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -150,7 +154,7 @@ void UserControl::PIDSetpoint(PinPoint *_OutPin, double _Kp, double _Ki, double 
 
   PIDControl = new PID(&PIDInput, &PIDOutput, &PIDSet, Kp, Ki, Kd, POn, PDir );
   PIDControl->SetOutputLimits(0,255);
-  if ( Status == ISON ) { PIDControl->SetMode(AUTOMATIC); } else { PIDControl->SetMode(MANUAL); }
+  if ( Status() == ISON ) { PIDControl->SetMode(AUTOMATIC); } else { PIDControl->SetMode(MANUAL); }
 }
 
 /******************************************************************************************************************//**
@@ -221,60 +225,24 @@ void UserControl::NotEqualToSetpoint(PinPoint *_OutPin, PinPoint *_ControlPin = 
 //----------------------------------------------------------------------------------------------------------------------
 /******************************************************************************************************************//**
  * @brief Applies the selected Control - Drives the Output Pin
- * @remarks
+ * @remarks Apply() takes for granite that the InPin Value was already retreived
  * @code
  *   exmaple code
  * @endcode
 **********************************************************************************************************************/
-void UserControl::Start() {
-  DBF(("UserControl::Start("));;DB((InPin->DeviceName));DBF((":"));DB((InPin->Name));DBF((":"));DB((ID));DBFL((")"));
+void UserControl::Apply(bool ManualApply = false) {
+  DBF(("UserControl::Apply("));;DB((OutPin->DeviceName));DBF((":"));DB((OutPin->Name));DBF((":"));DB((ID));
+  DBC;DB((ManualApply));DBFL((")"));
 
-  InPin->ReadValue();
-  State = WAIT;
-}
-
-/******************************************************************************************************************//**
- * @brief Sets/Gets a User Setpoint
- * @remarks returns WAIT, READY, SETTING, COMPLETE ( This is the State Machine of the Controller )
- * @code
- *   exmaple code
- * @endcode
-**********************************************************************************************************************/
-eState UserControl::GetState() {
-  DBFL(("UserControl::GetState()"));
+//  State = COMPLETE;                                                       // Moves Control to COMPLETE
+  int InputValue = InPin->GetRawValue();                                  // Read the InPin Value to Apply Auto-Control
   
-  if ( State == WAIT ) {                    // If Control is at WAIT
-    if ( InPin->GetState() != WAIT ) {      // Check that InPin Reading isn't WAITing
-      State = READY;                        // Move to Control State READY when InPin is no longer at WAIT
-    }
+  if ( !ManualApply ) {
+    if ( Status() != ISON ) return;                                         // Make sure Auto-Applies ISON
+    if ( InPin->State() == WAIT || InPin->Status() == ERR ) return; // If read value isn't available then return    
   }
-  // Calling Apply() moves Control to COMPLETE
-  return State;
-}
 
-void UserControl::SetState(eState _State) {
-  DBFL(("UserControl::SetState()"));
-
-  State = _State;
-}
-
-/******************************************************************************************************************//**
- * @brief Applies the selected Control - Drives the Output Pin
- * @remarks
- * @code
- *   exmaple code
- * @endcode
-**********************************************************************************************************************/
-void UserControl::Apply(bool SetPin = false) {
-  DBF(("UserControl::Apply("));;DB((OutPin->DeviceName));DBF((":"));DB((OutPin->Name));DBF((":"));DB((ID));DBFL((")"));
-
-  int InputValue = InPin->GetRawValue();      // Moves PinPoint State to COMPLETE
-  State = COMPLETE;
-  if ( !SetPin && ControlType == SET_PIN ) return;
-  if ( ControlType != ISON ) return;
-  if ( InPin->GetState() == WAIT || InPin->GetStatus() == ERR ) return;    // If read value isn't available then return
-
-  
+  //-------------------------------------------------------------------------------------------------------------------
   switch ( ControlType ) {
     
     case LESS_THAN:
@@ -298,7 +266,10 @@ void UserControl::Apply(bool SetPin = false) {
       break;
       
     case SET_PIN:
-      OutPin->SetTo(Setpoint, Status);
+      if ( ManualApply ) {
+        OutPin->SetTo(Setpoint);                    // Only apply SET_PIN Manually
+        InPin->CurrControl = NULL;                          // After Manual Set exit Control
+      }
       break;
 
     case PID_SET:
@@ -317,27 +288,44 @@ void UserControl::Apply(bool SetPin = false) {
         DBL((F(")")));
       }
       break;
+      
+    case SET_CONTROLLER:
+      if ( ManualApply ) { OutPin->SetTo(Setpoint, mStatus); }
+      break;
   }
-  if ( SetPin ) InPin->CurrControl = NULL;    // After Set return to Pin Read
 }
-
+//----------------------------------------------------------------------------------------------------------------------
+//                      [[ SetPoint Functions ]]
+//----------------------------------------------------------------------------------------------------------------------
 /******************************************************************************************************************//**
- * @brief Sets/Gets a User Setpoint
- * @remarks
+ * @brief Sets the Controls User-SetPoint
+ * @remarks 
+ * - Setting a new SetPoint will update the Display
+ * - If a 'ControlPin' was supplied on the Controller the SetPoint is saved to the 'ControlPin'
  * @code
  *   exmaple code
  * @endcode
 **********************************************************************************************************************/
 void UserControl::SetPoint(int _Set) {
   Setpoint = _Set;
-  if ( ControlPin != NULL ) ControlPin->SetTo(Setpoint, Status);
+  if ( ControlPin != NULL ) ControlPin->SetTo(Setpoint, mStatus);    // Make Set on ControlPin
+  Display();
 }
+
+/******************************************************************************************************************//**
+ * @brief Gets the Controls User-SetPoint
+ * @remarks
+ * @code
+ *   exmaple code
+ * @endcode
+**********************************************************************************************************************/
 int UserControl::SetPoint() {
+  if ( ControlPin != NULL ) { Setpoint = ControlPin->GetRawValue(); } // Retreive SetPoint from ControlPin
   return Setpoint;
 }
 
 /******************************************************************************************************************//**
- * @brief Adds or Subtracts to the Setpoint using the Modified Display Value
+ * @brief Adds or Subtracts to the Setpoint using the Modified Display Value and updates the Display
  * @remarks
  * @code
  *   exmaple code
@@ -357,11 +345,13 @@ void UserControl::SetPointAdd(int AddValue) {
     }
     if ( Setpoint < 0 ) Setpoint = 0;
   }
-  if ( ControlPin != NULL ) ControlPin->SetTo(Setpoint, Status);
+  if ( ControlPin != NULL ) ControlPin->SetTo(Setpoint, mStatus);
+
+  Display();
 }
 
 /******************************************************************************************************************//**
- * @brief IsOn Get/Set wrappers
+ * @brief Set the Control Status (
  * @remarks
  * - If 'ControlPin' is set the status is retreived from the Virtual Pin
  * - Else the Status is stored locally
@@ -369,22 +359,86 @@ void UserControl::SetPointAdd(int AddValue) {
  *   exmaple code
  * @endcode
 **********************************************************************************************************************/
-void UserControl::IsOn(bool _IsOn) {
-  DBF(("UserControl::IsOn("));DB((_IsOn));DBFL((")"));
+void UserControl::Status(PinStatus _Status) {
+  DBF(("UserControl::Status("));DB((_Status));DBFL((")"));
 
-  if ( _IsOn ) { 
-    Status = ISON; 
+  if ( _Status == ISON ) { 
+    mStatus = ISON;
     if ( ControlType == PID_SET ) PIDControl->SetMode(AUTOMATIC);
   } else { 
-    Status = ISOFF;
+    mStatus = ISOFF;
     if ( ControlType == PID_SET ) PIDControl->SetMode(MANUAL); 
   }
-  if ( ControlPin != NULL ) OutPin->SetTo(Setpoint, Status);
-  if ( Status == ISON && ID != NULL ) { OnControls[ObjectIndex] = ID; } 
+  if ( ControlPin != NULL ) ControlPin->SetTo(Setpoint, mStatus);
+  if ( mStatus == ISON && ID != NULL ) { OnControls[ObjectIndex] = ID; } 
   else { OnControls[ObjectIndex] = ' '; }
-  //DB((F("OnControls["));DB((ObjectIndex));DB((F("]="));DBL((OnControls[ObjectIndex]));
+
+  // Update the Display
+  Display();
+  //DB((F("OnControls["));DB((ObjectIndex));DB((F("]="));DBL((OnControls[ObjectIndex]));  
 }
-bool UserControl::IsOn() {
-  if ( ControlPin != NULL ) return (OutPin->GetStatus() == ISON);
-  return ( Status == ISON );
+
+/******************************************************************************************************************//**
+ * @brief Get the Control Status
+ * @remarks
+ * - If 'ControlPin' is set the status is retreived from the Virtual Pin
+ * - Else the Status is stored locally
+ * @code
+ *   exmaple code
+ * @endcode
+**********************************************************************************************************************/
+PinStatus UserControl::Status() {
+  if ( ControlPin != NULL ) mStatus = ControlPin->Status();
+  return mStatus;
 }
+
+/******************************************************************************************************************//**
+ * @brief private. Displays the Control on an LCD
+ * @remarks
+ * @code
+ *   exmaple code
+ * @endcode
+**********************************************************************************************************************/
+void UserControl::Display() {
+  if ( LCD == NULL ) return;
+  DBFL(("UserControl::Display()"));
+  
+  // These controls don't need a Control display
+  if ( ControlType == LCD_READONLY || ControlType == TIE_PINS ) return;
+    
+  // Display Device ( Top Row Left )
+  LCD->clear();LCD->setCursor(0,0);
+  LCD->print( InPin->DeviceName );
+
+  // Display Control ON/OFF Status
+  if ( ControlType != SET_PIN ) {
+    if ( Status() == ISON ) { LCD->setCursor(14,0);LCD->print("On"); }
+    else { LCD->setCursor(13,0);LCD->print("Off"); }
+  }
+  
+  //Display the Pin and Setpoint
+  LCD->setCursor(0,1);LCD->print( InPin->Name );LCD->print(" ");
+    
+    switch ( ControlType ) {
+      case SET_PIN:         LCD->print("SET");LCD->print(char(126));break; // 126 ->
+      case PID_SET:         LCD->print("PID");LCD->print(char(126));break; // 126 ->
+      case SET_CONTROLLER:  LCD->print("SET");LCD->print(char(126));break; // 126 ->
+      case LESS_THAN:       LCD->print(char(225));LCD->print("<");break; // 225 = a-dots
+      case GREATER_THAN:    LCD->print(char(225));LCD->print(">");break; // 225 = a-dots
+      case EQUAL_TO:        LCD->print(char(225));LCD->print("=");break; // 225 = a-dots
+      case NOT_EQUAL_TO:    LCD->print(char(225));LCD->print(char(183));break; // 225 = a-dots, 183 = slashed =
+    }
+    //ISOFF = 0, ISON = 1, ERR = 2, OKAY = 3
+
+    if ( Status() == ERR ) { LCD->print("ERR"); }
+    else {
+      if ( InPin->IsOnOff ) {
+        if ( SetPoint() == 0 ) { LCD->print("Off"); }
+        else { LCD->print("On"); }
+      } else {
+        LCD->print(SetPoint());
+      }
+    }
+  
+}
+

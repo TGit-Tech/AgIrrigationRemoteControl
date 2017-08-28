@@ -5,6 +5,9 @@
  *  - PinPoints define any hardwired Accessory like relays, meters, buzzers, lights, ultrasonic, etc...
  *  - PinPoint defines Read / Write functions for the Pin
  *  - PinPoint acts as a 'UserControl' objects collection for this paticular Pins ( Read->Control ) process.
+ *  - CONTROLLER pin serves both local save of Controller SetPoint & Status
+ *  - CONTROLLER pin also serves as remote get/set of Controller SetPoint & Status
+ *  - Of Course the CONTROLLER 'ControlPin' is always on the local device!
  * @authors 
  *    tgit23        8/2017       Original
  **********************************************************************************************************************/
@@ -29,10 +32,11 @@ PeerIOSerialControl *PinPoint::XBee = NULL; // Static XBee for all PinPoints
 //---------------------------------------------------------------------------------------------------------------------
 // Constructor
 //---------------------------------------------------------------------------------------------------------------------
-PinPoint::PinPoint(uint8_t *_Device, uint8_t *_Pin, char *_DeviceName) {
+PinPoint::PinPoint(uint8_t *_Device, uint8_t *_Pin, char *_DeviceName, LiquidCrystal *_LCD) {
   Device = _Device;
   Pin = _Pin;
   DeviceName = _DeviceName;
+  LCD = _LCD;
 }
 
 //---------------------------------------------------------------------------------------------------------------------
@@ -41,14 +45,26 @@ PinPoint::PinPoint(uint8_t *_Device, uint8_t *_Pin, char *_DeviceName) {
 void PinPoint::Mode(uint8_t _Mode) {
   PinMode = _Mode;
   
-  if ( !Device ) return; // Set pinMode() if Local device
   switch ( PinMode ) {
-    case INPUT:           pinMode(Pin, INPUT);IsOnOff = ( Pin < A0 ); break;
-    case INPUT_PULLUP:    pinMode(Pin, INPUT_PULLUP);IsOnOff = ( Pin < A0 ); break;
-    case OUTPUT:          pinMode(Pin, OUTPUT);IsOnOff = ( Pin < A0 ); break;
+    case INPUT:           
+      if ( Device ) pinMode(Pin, INPUT);
+      IsOnOff = ( Pin < A0 ); 
+      break;
+    case INPUT_PULLUP:    
+      if ( Device ) pinMode(Pin, INPUT_PULLUP);
+      IsOnOff = ( Pin < A0 ); 
+      break;
+    case OUTPUT:          
+      if ( Device ) pinMode(Pin, OUTPUT);
+      IsOnOff = ( Pin < A0 ); 
+      break;
     case INPUT_SONIC:     break;
-    case OUTPUT_BUZZER:   pinMode(Pin, OUTPUT);break;
-    case OUTPUT_PWM:      pinMode(Pin, OUTPUT);break;
+    case OUTPUT_BUZZER:   
+      if ( Device ) pinMode(Pin, OUTPUT);
+      break;
+    case OUTPUT_PWM:      
+      if ( Device ) pinMode(Pin, OUTPUT);
+      break;
     case CONTROLLER:      break;
   }
 }
@@ -69,138 +85,148 @@ void PinPoint::Mode(uint8_t _Mode, char *_Name, uint8_t _TrigPin, uint8_t _EchoP
     }
   }
 }
-   
-/******************************************************************************************************************//**
- * @brief Reads the Value and stores it; Value is then gotten by calling GetRawValue() or GetModifiedValue()
- * @remarks
- * @code
- *   APin.ReadValue();
- *   while ( APin.Status() == WAIT ) { // Loop Till Value is Retreivable }
- *   GottenValue = APin.GetValue();
- * @endcode
-**********************************************************************************************************************/
-void PinPoint::ReadValue(bool _ForceBlocking = false) {
-  DB((F("PinPoint::ReadValue("))); if ( _ForceBlocking ) { DB((F("Blocking")));DBC; }
-  DB((F("Device=")));DB((int(Device)));DBC;DB((F("Pin=")));DB((int(Pin)));DBL((")"));
 
-  mStatus = ERR; mPacketID = -1; 
-  if ( Device > 16 || Pin > 127 ) return;    // Value Check
-  State = WAIT;
+//---------------------------------------------------------------------------------------------------------------------
+// ReadValue()
+//---------------------------------------------------------------------------------------------------------------------
+void PinPoint::ReadValue(bool _ForceBlocking = false) {
+  DBL((""));DB((F("PinPoint::ReadValue("))); if ( _ForceBlocking ) { DB((F("Blocking")));DBC; }
+  DBF(("Device="));DB((int(Device)));DBC;DB((F("Pin=")));DB((int(Pin)));DB((")"));
+
+  mStatus = ERR; mPacketID = -1;              // Set Default Status
+  if ( Device > 16 || Pin > 127 ) return;     // Value Range Check
+  mState = WAIT;                              // Set Default State
   
-  if ( !Device ) {                         //--- Local Pin Read ---
-    if ( PinMode == INPUT_SONIC ) {                          // SonicPin Only works on local device
+  if ( !Device ) {                                          //--- ThisDevice Pin Read ---
+    if ( PinMode == INPUT_SONIC ) {                         // SonicPin Only works on local device
       if ( Sonar != NULL ) {
-        mValue = Sonar->ping_in();                        // Measure the Distance
-        if ( mValue != -1 ) mStatus = OKAY;               
-        XBee->VirtualPin(Pin, mValue);                    // Record distance on the Virtual Pin
+        mValue = Sonar->ping_in();                          // Store Measured Distance               
+        XBee->VirtualPin(Pin, mValue);                      // Record distance on the Virtual Pin
       }
     }
-    else if ( PinMode == OUTPUT_PWM ) { mValue = XBee->analogReadOutput(Pin); }
-    else if ( Pin >= A0 ) { mValue = analogRead(Pin); }
-    else { mValue = digitalRead(Pin); }
-    if ( mValue != -1 ) { mStatus = OKAY; }
-    DB((F("PinPoint::ReadValue LOCAL=")));DBL((mValue));
-    State = READY;
-  }
-  else if ( _ForceBlocking ) {
-    if ( Device != XBee->TargetArduinoID() ) XBee->TargetArduinoID( Device ); //Set TransceiverID
-    if ( Pin >= A0 || PinMode ==OUTPUT_PWM ) { mValue = XBee->analogReadB(Pin); }
-    else { mValue = XBee->digitalReadB(Pin); }
-    if ( mValue != -1 ) { mStatus = OKAY; }
-    DB((F("PinPoint::ReadValue BLOCKED=")));DBL((mValue));
-    State = READY;
-  }
-  else {                                                        //--- Remote Pin Read ---
-    if ( Device != XBee->TargetArduinoID() ) XBee->TargetArduinoID( Device ); //Set TransceiverID
-    mWaitStart = millis();
-    if ( Pin >= A0 || PinMode ==OUTPUT_PWM || PinMode == CONTROLLER ) { mPacketID = XBee->analogReadNB(Pin); }
-    else { mPacketID = XBee->digitalReadNB(Pin); }
-    DBL((F("PinPoint::ReadValue REQUESTED")));
-  }  
-}
-
-/******************************************************************************************************************//**
- * @brief Checks XBee communications and returns 'true' if the pin Status has changed
- * @remarks
- * @code
- *   exmaple code
- * @endcode
-**********************************************************************************************************************/
-eState PinPoint::GetState() {
-  XBee->Available();
-  if ( State == WAIT ) {
-    // Check GetReply()
-    if ( mPacketID != -1 ) {
-      int Ret = XBee->GetReply(mPacketID);
-      if ( Ret != -1 ) { mValue = Ret; mStatus = OKAY; State = READY; }
+    
+    else if ( PinMode == OUTPUT_PWM ) { 
+      mValue = XBee->analogReadOutput(Pin);                 // Read PWM Setting through Arduino registers
     }
-    // Timeout
-    if ( millis() - mWaitStart > XBee->Timeout() ) { mPacketID = -1; mStatus = ERR; State = READY; }
+    else if ( Pin >= A0 ) { mValue = analogRead(Pin); }     // Analog Read
+    else { mValue = digitalRead(Pin); }                     // Digital Read
+    
+    if ( mValue != -1 ) { mStatus = OKAY; }                 // Set Status
+    mState = READY;                                         // Set State
+    DBF((" - LOCAL="));DBL((mValue));                       // Debug Show value obtained
   }
-  /* Debug
-  switch ( State ) {
-    case WAIT:      DBFL(("PinPoint::GetState(WAIT)"));break;
-    case READY:     DBFL(("PinPoint::GetState(READY)"));break;
-    case SETTING:   DBFL(("PinPoint::GetState(SETTING)"));break;
-    case COMPLETE:  DBFL(("PinPoint::GetState(COMPLETE)"));break;
+  
+  else if ( _ForceBlocking ) {                                                    //--- Remote Device Pin Read ---
+    if ( Device != XBee->TargetArduinoID() ) XBee->TargetArduinoID( Device );     // Set XBee TransceiverID
+    if ( Pin >= A0 || PinMode ==OUTPUT_PWM ) { mValue = XBee->analogReadB(Pin); } // Analog Read
+    else { mValue = XBee->digitalReadB(Pin); }                                    // Digital Read
+    if ( mValue != -1 ) { mStatus = OKAY; }                                       // Set Status
+    mState = READY;                                                               // Set State
+    DBF((" - REMOTE BLOCKED="));DBL((mValue));                                    // Debug Show Value
   }
-  */
-  return State;
+  
+  else {                                                                          //--- Remote Device Pin Read ---
+    if ( Device != XBee->TargetArduinoID() ) XBee->TargetArduinoID( Device );     // Set XBee TransceiverID
+    mWaitStart = millis();                                                        // Start WAIT clock
+    if ( Pin >= A0 || PinMode ==OUTPUT_PWM || PinMode == CONTROLLER ) { 
+      mPacketID = XBee->analogReadNB(Pin); }                                      // Analog Read
+    else { mPacketID = XBee->digitalReadNB(Pin); }                                // Digital Read
+    DBFL((" - REMOTE REQUESTED"));                                                // Debug Show value REQUESTED
+  }
+  Display();                                                // Update the Display
 }
 
-void PinPoint::SetState(eState _State) {
-  State = _State;
-}
-
-/******************************************************************************************************************//**
- * @brief Use a user-defined function in the main sketch to modify the raw value read from the arduino
- * @remarks
- * - Raw values are still used behind the scene's only the displayed value is modified
- * @code
- *   exmaple code
- * @endcode
-**********************************************************************************************************************/
-PinStatus PinPoint::GetStatus() {
-  return mStatus;
-}
-
-/******************************************************************************************************************//**
- * @brief Use a user-defined function in the main sketch to modify the raw value read from the arduino
- * @remarks
- * - Raw values are still used behind the scene's only the displayed value is modified
- * @code
- *   exmaple code
- * @endcode
-**********************************************************************************************************************/
+//---------------------------------------------------------------------------------------------------------------------
+// GetRawValue ()
+//---------------------------------------------------------------------------------------------------------------------
 int PinPoint::GetRawValue() {
+  if ( PinMode == CONTROLLER ) { return XBee->VirtualPin(Pin); }
   return mValue;
 }
 
-/******************************************************************************************************************//**
- * @brief Use a user-defined function in the main sketch to modify the raw value read from the arduino
- * @remarks
- * - Raw values are still used behind the scene's only the displayed value is modified
- * @code
- *   exmaple code
- * @endcode
-**********************************************************************************************************************/
+//---------------------------------------------------------------------------------------------------------------------
+// AttachValueModifier ()
+//---------------------------------------------------------------------------------------------------------------------
+void PinPoint::AttachValueModifier(int (*_ValueModifierCallback)(int)) {
+  ValueModifierCallback = _ValueModifierCallback;
+}
+
+//---------------------------------------------------------------------------------------------------------------------
+// GetModifiedValue ()
+//---------------------------------------------------------------------------------------------------------------------
 int PinPoint::GetModifiedValue() {
+  DBF(("PinPoint::GetModifiedValue(Raw="));DB((mValue));DBFL((")"));
+  
   if ( ValueModifierCallback == NULL ) return mValue;
   return (*ValueModifierCallback)(mValue);
 }
 
+//---------------------------------------------------------------------------------------------------------------------
+// ModifyValue (int)
+//---------------------------------------------------------------------------------------------------------------------
 int PinPoint::ModifyValue(int _Value) {
+  DBF(("PinPoint::ModifyValue("));DB((mValue));DBFL((")"));
+  
   if ( ValueModifierCallback == NULL ) return _Value;
   return (*ValueModifierCallback)(_Value);
 }
-/******************************************************************************************************************//**
- * @brief Use a user-defined function in the main sketch to modify the raw value read from the arduino
- * @remarks
- * - Raw values are still used behind the scene's only the displayed value is modified
- * @code
- *   exmaple code
- * @endcode
-**********************************************************************************************************************/
+
+//---------------------------------------------------------------------------------------------------------------------
+// Get State()
+//---------------------------------------------------------------------------------------------------------------------
+eState PinPoint::State() {
+  XBee->Available();
+  if ( mState == WAIT ) {
+    
+    if ( mPacketID != -1 ) {                        // Check for a GetReply()
+      int Ret = XBee->GetReply(mPacketID);
+      if ( Ret != -1 ) {
+        DBF(("PinPoint::State(WAIT) -> "));         // Debug show WAIT->READY State Change
+        if ( Pin > 63 ) {
+          mStatus = (Ret & 0x3000) >> 12;           // Parse Status from Virtual Pin Reads
+          mValue = Ret & 0x0FFF;                    // Parse Value from Virtual Pin Reads
+          DBF(("VirtualPin "));                     // Debug show Virtual Pin
+        } else {
+          mValue = Ret;                             // Set the Returned Value
+          mStatus = OKAY;                           // Set Status as OKAY
+        }
+        mState = READY;                             // Switch State to READY
+        DBF(("READY - Status="));DB((mStatus));     // Debug Show Status
+        DBF((" Value="));DBL((mValue));             // Debug Show Value
+        Display();                                  // Update the Display with Value
+      }
+    }
+    
+    // Timeout
+    if ( mState == WAIT && millis() - mWaitStart > XBee->Timeout() ) {
+      mPacketID = -1;
+      mStatus = ERR; mState = READY;                // State to READY and Status to ERR
+      DBFL(("PinPoint::State(WAIT) -> TIMEOUT!"));  // Debug Show Timeout
+      Display();                                    // Update Display
+    }
+  }
+  return mState;
+}
+
+//---------------------------------------------------------------------------------------------------------------------
+// Set State()
+//---------------------------------------------------------------------------------------------------------------------
+void PinPoint::State(eState _State) {
+  mState = _State;
+  if ( mState == SETTING && CurrControl != NULL ) { CurrControl->Display(); }
+}
+
+//---------------------------------------------------------------------------------------------------------------------
+// Get Status()
+//---------------------------------------------------------------------------------------------------------------------
+PinStatus PinPoint::Status() {
+  if ( !Device && Pin > 63 ) mStatus = XBee->VirtualPinStatus(Pin);    // For PinMode CONTROLLER
+  return mStatus;
+}
+
+//---------------------------------------------------------------------------------------------------------------------
+// SetTo()
+//---------------------------------------------------------------------------------------------------------------------
 void PinPoint::SetTo(unsigned int _Value, PinStatus _Status = OKAY) {
   DB((F("PinPoint::SetTo(")));DB((int(Device)));DBC;DB((int(Pin)));DBC;DB((_Value));DBL((")"));
 
@@ -214,7 +240,10 @@ void PinPoint::SetTo(unsigned int _Value, PinStatus _Status = OKAY) {
 
   // Drive Local Pin
   else if ( !Device ) {                                          // Drive a LOCAL Pin
-    if ( Pin > 63 ) { XBee->VirtualPin(Pin, _Value, _Status); }                 // Drive a Virtual Pin
+    if ( Pin > 63 ) { 
+      XBee->VirtualPin(Pin, _Value, _Status); 
+      DB((F("PinPoint::SetTo - VirtualPin(")));DB((int(Pin)));DBC;DB((_Value));DBC;DB((_Status));DBL((")"));
+    }                 // Drive a Virtual Pin
     else {
       if ( Pin >= A0 || PinMode == OUTPUT_PWM ) { 
         analogWrite(Pin, _Value); 
@@ -231,20 +260,55 @@ void PinPoint::SetTo(unsigned int _Value, PinStatus _Status = OKAY) {
     if ( XBee == NULL ) return;
     if ( Device != XBee->TargetArduinoID() ) XBee->TargetArduinoID( Device );
     if ( PinMode == OUTPUT_PWM ) { XBee->analogWriteB(Pin, _Value); }                  // Set the Remote ArduinoOUTPUT_PWM Pin
-    else if ( PinMode == CONTROLLER ) { XBee->VirtualPin(Pin, _Value, _Status); }
+    else if ( PinMode == CONTROLLER ) { 
+      int ValueWithStatus = ((_Value << 0) & 0x0FFF) + ((_Status << 12) & 0x3000);
+      XBee->analogWriteB(Pin,ValueWithStatus);
+    }
     else { XBee->digitalWriteB(Pin, _Value); }                                  // Set the Remote Arduino Digital Pin
   }
 }
 
-/******************************************************************************************************************//**
- * @brief Use a user-defined function in the main sketch to modify the raw value read from the arduino
- * @remarks
- * - Raw values are still used behind the scene's only the displayed value is modified
- * @code
- *   exmaple code
- * @endcode
-**********************************************************************************************************************/
-void PinPoint::AttachValueModifier(int (*_ValueModifierCallback)(int)) {
-  ValueModifierCallback = _ValueModifierCallback;
+//---------------------------------------------------------------------------------------------------------------------
+// Display
+//---------------------------------------------------------------------------------------------------------------------
+void  PinPoint::Display() {
+  DBFL(("PinPoint::Display()"));
+  if ( LCD == NULL ) return;
+    
+  // Display Device ( Top Row Left )
+  LCD->clear();LCD->setCursor(0,0);
+  LCD->print( DeviceName );
+
+  // Display OnControls
+  if ( PinMode != CONTROLLER ) {
+    int lastspace = 15 - strlen( DeviceName ); int pos = 15;
+    for ( int Idx = 15; Idx >= 0; Idx-- ) {
+      if ( UserControl::OnControls[Idx] != NULL ) {
+        if ( UserControl::OnControls[Idx] != ' ' )  {
+          if ( pos < lastspace ) break;
+          LCD->setCursor(pos,0);LCD->print(UserControl::OnControls[Idx]);
+        }
+      }
+    }
+  } else {
+    if ( mStatus == ISON ) { LCD->setCursor(14,0);LCD->print("On"); }
+    else if ( mStatus == ISOFF ) { LCD->setCursor(13,0);LCD->print("Off"); }
+    else if ( mStatus == ERR ) { LCD->setCursor(15,0);LCD->print("?"); }
+  }
+  
+  //Display the Pin Name ( Bottom Row )
+  LCD->setCursor(0,1);LCD->print( Name );LCD->print("=");
+
+  // Display Value
+  if ( mState == WAIT ) { LCD->print("?"); }
+  else if ( mState == READY ) {
+    if ( mState == ERR ) { LCD->print("ERR"); }
+    else if ( IsOnOff ) {
+      if ( mValue == 0 ) { LCD->print("Off"); }
+      else { LCD->print("On"); }
+    } else {
+      LCD->print(GetModifiedValue());
+    }
+  }   
 }
 

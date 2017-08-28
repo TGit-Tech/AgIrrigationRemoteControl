@@ -23,9 +23,9 @@
 #define BUTTON_DEBOUNCE_MS    400               // How close in milliseconds two button presses will register  
 #define AUTO_UPDATE_AFTER_MS  30000             // Start iterating Menu-Items after idle for (ms)
 
-#ifndef _ECONTROL
+#ifndef _ESTATE
 typedef enum eState : byte { WAIT, READY, SETTING, PAUSE, SETPAUSE, COMPLETE };
-#define _ECONTROL
+#define _ESTATE
 #endif
 typedef enum eButton : byte { RIGHT, UP, DOWN, LEFT, SELECT, NONE };
 
@@ -39,18 +39,15 @@ namespace ThisDevice {
   PinPoint*         Pin(uint8_t _DeviceID, uint8_t _Pin, char *DeviceName);                    // Add or Gets a PinPoint to the Device
   UserControl*      Control(PinPoint *InputPin, char _ID = '?');                // Returns a new Control Object attached to the 'InputPin'
   
-  void              DisplayControl(UserControl *Ctrl);
-  void              DisplayPin(PinPoint *InPin);
-  
   void              ButtonCheck(int adc_value);
   int               availableMemory();
 
   // Objects
-  extern SSoftwareSerial  *IOSerial;
+  extern SSoftwareSerial  *IOSerial;            // Contains pointer to XBee Serial Object
   extern LiquidCrystal    *oLCD;                // Contains pointer to LCD Control Object
   extern UserControl      NullControl;          // NullControl for controls that are NOT for 'ThisDevice'
-  extern PinPoint         *FirstPin;            // Pin Link-List for 'ThisDevice'
-  extern PinPoint         *CurrPin;             // Current Pin for 'ThisDevice'
+  extern PinPoint         *FirstPin;            // Pin Link-List for 'ThisDevice' ( Contains all Pins on all Devices )
+  extern PinPoint         *CurrPin;             // Current Pin for 'ThisDevice'   ( Current Pin being Processed )
   
 
   // Variables
@@ -58,8 +55,8 @@ namespace ThisDevice {
   extern bool             XBeeConfig;           // True - when in XBee Config Mode
 
   extern bool             Forward;              // True if Iterating the Pins forward ( DOWN/NEXT )
-  extern bool             AutoUpdate;           // True - If its time to iterate controls  
-  extern unsigned long    lastupdate;
+  extern bool             AutoUpdate;           // True - If its time to iterate Pins
+  extern unsigned long    lastupdate;           // Last time a Pin was processed
   extern unsigned long    UpdateInterval;       // Time lapse between executing each Control
   
   // LCD Variables

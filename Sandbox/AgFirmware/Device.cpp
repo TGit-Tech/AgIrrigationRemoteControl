@@ -50,7 +50,9 @@ Device::Device(char *_Name, byte _DeviceID ) {
  * @endcode
 **********************************************************************************************************************/
 PinPoint* Device::Pin(uint8_t _Pin) {
+  if ( PinPoint::XBee == NULL ) return;
   DB((Name));DB((F("::Pin(")));DB((_Pin));
+
   return ThisDevice::Pin(DeviceID, _Pin, Name);
 }
 
@@ -62,8 +64,9 @@ PinPoint* Device::Pin(uint8_t _Pin) {
  * @endcode
 **********************************************************************************************************************/
 UserControl* Device::Control(PinPoint *InputPin, char _ID = '?') {
+  if ( PinPoint::XBee == NULL ) return &ThisDevice::NullControl;
   DBL((""));DBF(("Device::Control("));DB((InputPin->DeviceName));DBF((":"));DB((InputPin->Name));DBC;DB((_ID));
-  
+
   if ( DeviceID == ThisDevice::DeviceID ) { DBFL((")")); return ThisDevice::Control(InputPin, _ID); }
   else { DBFL((") - Control is NOT for this Device!")); return &ThisDevice::NullControl; }
   
@@ -133,7 +136,7 @@ namespace ThisDevice {
   
     // Find or Create the Pin
     if ( FirstPin == NULL ) {
-      FirstPin = new PinPoint(PinDeviceID, _Pin, DeviceName);
+      FirstPin = new PinPoint(PinDeviceID, _Pin, DeviceName, oLCD);
       DB((") - CREATED! *"));DB((availableMemory()));DBFL(("Bytes Free"));
       return FirstPin;
     } else {
@@ -144,7 +147,7 @@ namespace ThisDevice {
           return thisPin;
         } 
         if ( thisPin->Next == NULL ) {
-          thisPin->Next = new PinPoint(PinDeviceID, _Pin, DeviceName);
+          thisPin->Next = new PinPoint(PinDeviceID, _Pin, DeviceName, oLCD);
           thisPin->Next->Prev = thisPin;
           DB((") - CREATED! *"));DB((availableMemory()));DBFL(("Bytes Free"));
           return thisPin->Next;
@@ -172,13 +175,11 @@ namespace ThisDevice {
       InputPin->FirstControl = NewControl; 
       return InputPin->FirstControl;
     }
-    else {
-      UserControl *thisControl = InputPin->FirstControl;
-      while ( thisControl->Next != NULL ) { thisControl = thisControl->Next; }
-      thisControl->Next = NewControl;
-      thisControl->Next->Prev = thisControl;
-      return thisControl->Next;
-    }
+    UserControl *thisControl = InputPin->FirstControl;
+    while ( thisControl->Next != NULL ) { thisControl = thisControl->Next; }
+    thisControl->Next = NewControl;
+    thisControl->Next->Prev = thisControl;
+    return thisControl->Next;
   }
   
   /******************************************************************************************************************//**
@@ -225,10 +226,10 @@ namespace ThisDevice {
     Serial.begin(9600);
 
     if ( !XBeeConfig ) { PinPoint::XBee = new PeerIOSerialControl(DeviceID, IOSerial, Serial); }  // XBee Object
-    else if ( oLCD != NULL ) {                      
+    else if ( oLCD != NULL ) {                     
       oLCD->begin(16, 2);                             // Show XBee Config on Display when in XBee Config Mode
       oLCD->clear();oLCD->setCursor(0,0);oLCD->print("XBee Config Mode");
-      oLCD->clear();oLCD->setCursor(0,1);oLCD->print("Ver: ");oLCD->print(FIRMWAREVER);
+      oLCD->setCursor(0,1);oLCD->print("Ver: ");oLCD->print(FIRMWAREVER);
     }
 
     DB((F("Device::Communications(")));               // Debug
@@ -254,74 +255,66 @@ namespace ThisDevice {
     }
   
     if ( PinPoint::XBee != NULL ) PinPoint::XBee->Available();            // Check Communications
-    if ( oLCD != NULL ) ButtonCheck(analogRead(0));          // Check for button-press if LCD attached
+    if ( oLCD != NULL ) ButtonCheck(analogRead(0));                       // Check for button-press if LCD attached
   
     //--------------------------------------------------------------------------------------------------------------
-    // Insure a Device.Pin with a Control while moving either FORWARD(Next) or in Reverse(Prev)
+    // Insure a Device:Pin:Control while moving either FORWARD(Next) or in Reverse(Prev)
     //--------------------------------------------------------------------------------------------------------------
-    if ( CurrPin == NULL ) {                                  // Insure a Pin
-      PinPoint *thisPin = FirstPin;                           // Start at First Pin
-      if ( thisPin == NULL ) return;                          // If FirstPin is NULL there are no Pins
-      if ( Forward ) { CurrPin = thisPin; }                   // Leave at FirstPin if moving FORWARD
-      else {                                                              // ELSE
-        while ( thisPin->Next != NULL ) { thisPin = thisPin->Next; }      // Get the Last Pin on the Device
-        CurrPin = thisPin;
+    if ( CurrPin == NULL ) {                                        // Insure a Pin 'CurrPin'
+      PinPoint *thisPin = FirstPin;                                   // Start at First Pin
+      if ( thisPin == NULL ) return;                                  // If FirstPin is NULL there are no Pins
+      if ( Forward ) { CurrPin = thisPin; }                         // Leave at FirstPin if moving FORWARD ( NEXT )
+      else {                                                          // ELSE
+        while ( thisPin->Next != NULL ) { thisPin = thisPin->Next; }  // Get the Last Pin on the Device
+        CurrPin = thisPin;                                            // When moving in Reverse ( PREV )
       }
     }
-    //DB(( CurrDevice->Name ));DBF((":"));DBL(( CurrPin->Name ));
-  
-    if ( CurrPin->FirstControl == NULL ) {                    // Insure Pin has at least one Control
-      if ( Forward ) { CurrPin = CurrPin->Next; }             // If not move Forward(NEXT)
-      else { CurrPin = CurrPin->Prev; }                       // or Back(PREV)
+    
+    //DB(( CurrDevice->Name ));DBF((":"));DBL(( CurrPin->Name ));   // Debug Display 'CurrPin'
+    if ( CurrPin->FirstControl == NULL ) {                          // Insure Pin has at least one Control
+      if ( Forward ) { CurrPin = CurrPin->Next; }                     // If not move Forward(NEXT)
+      else { CurrPin = CurrPin->Prev; }                               // or Back(PREV)
       return;
     }
     
     //--------------------------------------------------------------------------------------------------------------
     // Read Pin Value and Display
     //--------------------------------------------------------------------------------------------------------------
-    if ( CurrPin->GetState() == COMPLETE ) {
-      CurrPin->ReadValue();                     // Start by requesting the Input Pin value
-      DisplayPin(CurrPin);                      // Update Display
+    if ( CurrPin->State() == COMPLETE ) {
+      CurrPin->ReadValue();                                 // Start by requesting the Input Pin value
       return;
     }
           
-    if ( CurrPin->GetState() == READY ) {       
-      DisplayPin(CurrPin);                      // Update Display with the READY value
-      CurrPin->SetState(PAUSE);                 // PAUSE until we're ready to Move-on
+    if ( CurrPin->State() == READY ) {      
+      CurrPin->State(PAUSE);                             // PAUSE until we're ready to Move-on
       
-      if ( !AutoUpdate ) return;                // Don't apply Pin controls in Manual Moves
+      if ( !AutoUpdate ) return;                            // Don't apply Pin-Controls during Manual Moves
       UserControl *thisControl = CurrPin->FirstControl;
       while ( thisControl != NULL ) {
-        thisControl->Apply();                   // Apply Every Control on this Pin
+        thisControl->Apply();                               // Apply Every Control on this Pin
         thisControl = thisControl->Next; 
       }
-      
       return;
     }
           
-    if ( CurrPin->GetState() == PAUSE ) {
+    if ( CurrPin->State() == PAUSE ) {
       if ( AutoUpdate ) {
         Forward = true;                                             // AutoUpdate goes Forward
         unsigned long ms = millis();
         if ((unsigned long)(ms - lastupdate) >= UpdateInterval) {
-          CurrPin->SetState(COMPLETE);                              // COMPLETE last Pin State
+          CurrPin->State(COMPLETE);                              // COMPLETE last Pin State
           CurrPin = CurrPin->Next;                                  // Move to the Next Pin
           lastupdate = ms;                                          // Record AutoUpdate time
         }
       }
     }
   
-    if ( CurrPin->GetState() == SETTING ) {
+    if ( CurrPin->State() == SETTING ) {
       if ( CurrPin->CurrControl == NULL ) {                         // Exit Controls when out-of-bounds
-        CurrPin->SetState(COMPLETE);                                // COMPLETE state will re-read the CurrPin
+        CurrPin->State(COMPLETE);                                // COMPLETE state will re-read the CurrPin
         return;
       }
-      DisplayControl(CurrPin->CurrControl);
-      CurrPin->SetState(SETPAUSE);
-    }
-  
-    if ( CurrPin->GetState() == SETPAUSE ) {
-      
+      CurrPin->State(SETPAUSE);
     }
     
     //--------------------------------------------------------------------------------------------------------------
@@ -330,61 +323,49 @@ namespace ThisDevice {
     if ( bpress == NONE ) return;                           // No-Button to Process
     
     if (bpress == DOWN ) {
-      if ( CurrPin->GetState() == SETTING || CurrPin->GetState() == SETPAUSE ) {
-        if ( CurrPin->CurrControl != NULL ) {
-          CurrPin->CurrControl->SetPointAdd(-1);
-          DisplayControl(CurrPin->CurrControl);
-        }
+      if ( CurrPin->State() == SETTING || CurrPin->State() == SETPAUSE ) {
+        if ( CurrPin->CurrControl != NULL ) { CurrPin->CurrControl->SetPointAdd(-1); }
       } else {
-        CurrPin->SetState(COMPLETE);                          // COMPLETE last Pin State
-        CurrPin = CurrPin->Next;                              // Move to the Next Pin
-        Forward = true;
+        CurrPin->State(COMPLETE);                          // COMPLETE last Pin State
+        CurrPin = CurrPin->Next; Forward = true;              // Move to the Next Pin
       }
     }
     
-    if ( bpress == UP ) {
-      if ( CurrPin->GetState() == SETTING || CurrPin->GetState() == SETPAUSE ) {
-        if ( CurrPin->CurrControl != NULL ) {
-          CurrPin->CurrControl->SetPointAdd(1);
-          DisplayControl(CurrPin->CurrControl);
-        }
+    else if ( bpress == UP ) {
+      if ( CurrPin->State() == SETTING || CurrPin->State() == SETPAUSE ) {
+        if ( CurrPin->CurrControl != NULL ) { CurrPin->CurrControl->SetPointAdd(1); }
       } else {
-        CurrPin->SetState(COMPLETE);                          // COMPLETE last Pin State
-        CurrPin = CurrPin->Prev;                              // Move to the Prev Pin
-        Forward = false;
+        CurrPin->State(COMPLETE);                          // COMPLETE last Pin State
+        CurrPin = CurrPin->Prev; Forward = false;             // Move to the Prev Pin
       }
     }
     
-    if ( bpress == RIGHT ) {
-      CurrPin->SetState(SETTING);
+    else if ( bpress == RIGHT ) {
       if ( CurrPin->CurrControl == NULL ) { CurrPin->CurrControl = CurrPin->FirstControl; }
       else { CurrPin->CurrControl = CurrPin->CurrControl->Next; }
-  
-      // Now; what to do with the Control;
-      
+      CurrPin->State(SETTING);
     }
-    if ( bpress == LEFT ) {
+    
+    else if ( bpress == LEFT ) {
       if ( CurrPin->CurrControl != NULL ) {
-        CurrPin->SetState(SETTING);
         CurrPin->CurrControl->Save();
         CurrPin->CurrControl = CurrPin->CurrControl->Prev;
+        CurrPin->State(SETTING);
       }
     }
-
     
-    if ( bpress == SELECT ) {
+    else if ( bpress == SELECT ) {
       DBFL(("bpress == SELECT"));
       if ( CurrPin->CurrControl != NULL ) {
         if ( CurrPin->CurrControl->ControlType != SET_PIN ) {
-          if ( CurrPin->CurrControl->IsOn() ) { CurrPin->CurrControl->IsOn(false); }
-          else { CurrPin->CurrControl->IsOn(true); }
-          CurrPin->SetState(SETTING);
+          if ( CurrPin->CurrControl->Status() == ISON ) { CurrPin->CurrControl->Status(ISOFF); }
+          else { CurrPin->CurrControl->Status(ISON); }
         } else {
-          CurrPin->SetState(SETTING);    
+          CurrPin->State(SETTING);    
           CurrPin->CurrControl->Apply(true);
         }
       } else {
-        CurrPin->SetState(COMPLETE);    // Query for an update
+        CurrPin->State(COMPLETE);    // Query for an update
       }
     }
     bpress = NONE;                    // Clear the Button after Processing
@@ -408,86 +389,7 @@ namespace ThisDevice {
   
     return size;
   }
-  
-  /******************************************************************************************************************//**
-  * @brief  Save the Controls 'Setpoint' to Eprom and VirtualPins
-  * @remarks
-  *  @code
-  *    exmaple code
-  *  @endcode
-  **********************************************************************************************************************/
-  void DisplayPin(PinPoint *InPin) {
-    if ( oLCD == NULL ) return;
-    if ( InPin == NULL ) return;
-    
-    // Display Device ( Top Row Left )
-    oLCD->clear();oLCD->setCursor(0,0);
-    oLCD->print( InPin->DeviceName );
-  
-    //Display the Pin and Read Value
-    oLCD->setCursor(0,1);oLCD->print( InPin->Name );oLCD->print("=");
-    
-    if ( InPin->GetState() == WAIT ) { oLCD->print("?"); }
-    else if ( InPin->GetState() == READY ) {
-      if ( InPin->GetStatus() == ERR ) { oLCD->print("ERR"); }
-      else if ( InPin->IsOnOff ) {
-        if ( InPin->GetRawValue() == 0 ) { oLCD->print("Off"); }
-        else { oLCD->print("On"); }
-      } else {
-        oLCD->print(InPin->GetModifiedValue());
-      }
-    }  
-  }
-  /******************************************************************************************************************//**
-  * @brief Start serial communications with Debug & XBee Module
-  * @remarks
-  * @code
-  *   exmaple code
-  * @endcode
-  **********************************************************************************************************************/
-  void DisplayControl(UserControl *Ctrl) {
-    
-    if ( oLCD == NULL ) return;
-    if ( Ctrl == NULL ) return;
 
-    // These controls don't need a Control display
-    if ( Ctrl->ControlType == LCD_READONLY || Ctrl->ControlType == TIE_PINS ) return;
-    
-    // Display Device ( Top Row Left )
-    oLCD->clear();oLCD->setCursor(0,0);
-    oLCD->print( Ctrl->InPin->DeviceName );
-
-    // Display Control ON/OFF Status
-    if ( Ctrl->ControlType != SET_PIN ) {
-      if ( Ctrl->IsOn() ) { oLCD->setCursor(14,0);oLCD->print("On"); }
-      else { oLCD->setCursor(13,0);oLCD->print("Off"); }
-    }
-  
-    //Display the Pin and Setpoint
-    oLCD->setCursor(0,1);oLCD->print( Ctrl->InPin->Name );oLCD->print(" ");
-    
-    switch ( Ctrl->ControlType ) {
-      case SET_PIN:         oLCD->print("SET");oLCD->print(char(126));break; // 126 ->
-      case PID_SET:         oLCD->print("PID");oLCD->print(char(126));break; // 126 ->
-      case SET_CONTROLLER:  oLCD->print("SET");oLCD->print(char(126));break; // 126 ->
-      case LESS_THAN:       oLCD->print(char(225));oLCD->print("<");break; // 225 = a-dots
-      case GREATER_THAN:    oLCD->print(char(225));oLCD->print(">");break; // 225 = a-dots
-      case EQUAL_TO:        oLCD->print(char(225));oLCD->print("=");break; // 225 = a-dots
-      case NOT_EQUAL_TO:    oLCD->print(char(225));oLCD->print(char(183));break; // 225 = a-dots, 183 = slashed =
-    }
-    //ISOFF = 0, ISON = 1, ERR = 2, OKAY = 3
-
-    if ( Ctrl->Status == ERR ) { oLCD->print("ERR"); }
-    else {
-      if ( Ctrl->InPin->IsOnOff ) {
-        if ( Ctrl->SetPoint() == 0 ) { oLCD->print("Off"); }
-        else { oLCD->print("On"); }
-      } else {
-        oLCD->print(Ctrl->SetPoint());
-      }
-    }
-  }
-  
   //=====================================================================================================================
   //------------------------------ BUTTON FUNCTIONS ---------------------------------------------------------------------
   //=====================================================================================================================
