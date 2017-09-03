@@ -42,17 +42,17 @@ UserControl::UserControl(PinPoint *_InPin, LiquidCrystal *_LCD, char _ID ) {
   DBF(("UserControl::UserControl("));DB((InPin->DeviceName));DBF((":"));DB((InPin->Name));DBF((":"));
   DB((ID));DBF((")"));
   
-  EpromOffset = NextEpromOffset;                          // Assign EEPROM Offset to store User Setpoints
+  EpromOffset = NextEpromOffset;                          // Assign EEPROM Offset to store User mSetpoints
   DB((F(" @EpromOffset=")));DB((EpromOffset));
   byte LoByte = EEPROM.read( EpromOffset );               // Read Eprom when Offset is assigned
   byte HiByte = EEPROM.read( EpromOffset + 1 );
   if ( HiByte > 0x3F ) {                                  // Initialize EPROM to 0x00 if out-of-bounds
     EEPROM.update( EpromOffset, 0x00 );
     EEPROM.update( EpromOffset + 1, 0x00 );
-    Setpoint = 0;
+    mSetpoint = 0;
   } else {                                                // ELSE assign the Eprom Read values
     mStatus = ((HiByte & 0x30) >> 4);                     // Bit 12 & 13 make Status
-    Setpoint = (int)(((HiByte & 0x0F) << 8) | LoByte);    // 0x0FFF 0->11-bits for value
+    mSetpoint = (int)(((HiByte & 0x0F) << 8) | LoByte);    // 0x0FFF 0->11-bits for value
   }
   NextEpromOffset = EpromOffset + 2;                      // Record the next available offset
 
@@ -73,15 +73,15 @@ void UserControl::Save() {
   DBFL(("UserControl::Save()"));
     
   // EEPROM - Save; Store the Value and Status as two bytes in Eprom
-  byte LoByte = ((Setpoint >> 0) & 0xFF);
-  byte HiByte = ((mStatus << 4 & 0x30) | (Setpoint >> 8 & 0x0F));
+  byte LoByte = ((mSetpoint >> 0) & 0xFF);
+  byte HiByte = ((mStatus << 4 & 0x30) | (mSetpoint >> 8 & 0x0F));
   EEPROM.update( EpromOffset, LoByte );
   EEPROM.update( (EpromOffset + 1), HiByte );
   DB((F("EEPROM.update( ")));DB((EpromOffset));DBC;DB((LoByte, HEX));DBL((F(")")));
   DB((F("EEPROM.update( ")));DB((EpromOffset + 1));DBC;DB((HiByte, HEX));DBL((F(")")));
 
   // VirtualPin - Save; If 'ControlPin' Exists - Save to a Virtual Pin
-  if ( ControlPin != NULL ) { ControlPin->SetTo(Setpoint, mStatus); }
+  if ( ControlPin != NULL ) { ControlPin->SetTo(mSetpoint, mStatus); }
   if ( ControlType == SET_CONTROLLER ) { Apply(true); } // Save to Virtual Pin
 }
 
@@ -96,6 +96,7 @@ void UserControl::Save() {
  * @endcode
 **********************************************************************************************************************/
 void UserControl::Settable() {
+  
   if ( InPin == NULL ) return;
   ControlType = SET_PIN; OutPin = InPin;
   
@@ -112,8 +113,10 @@ void UserControl::Settable() {
  * @endcode
 **********************************************************************************************************************/
 void UserControl::TieToPin(PinPoint *_OutPin) {
+  
   if ( InPin == NULL ) return;
-  ControlType = TIE_PINS; OutPin = _OutPin;
+  ControlType = TIE_PINS;
+  OutPin = _OutPin;
   
   // Debug
   DBF(("UserControl::TieToPin("));DB((InPin->DeviceName));DBF((":"));DB((InPin->Name));DBF((":"));
@@ -128,8 +131,10 @@ void UserControl::TieToPin(PinPoint *_OutPin) {
  * @endcode
 **********************************************************************************************************************/
 void UserControl::SetController() {
+  
   if ( InPin == NULL ) return;
-  ControlType = SET_CONTROLLER; OutPin = InPin;
+  ControlType = SET_CONTROLLER;
+  OutPin = InPin;
   
   // Debug
   DBF(("UserControl::SetController("));
@@ -143,8 +148,13 @@ void UserControl::SetController() {
  * @endcode
 **********************************************************************************************************************/
 void UserControl::PIDSetpoint(PinPoint *_OutPin, double _Kp, double _Ki, double _Kd, int _POn, int _PDir, PinPoint *_ControlPin = NULL ) {
+  
   if ( InPin == NULL ) return;
-  ControlType = PID_SET; OutPin = _OutPin; Kp = _Kp; Ki = _Ki; Kd = _Kd; POn = _POn; PDir = _PDir; ControlPin = _ControlPin;
+  ControlType = PID_SET;
+  OutPin = _OutPin;
+  Kp = _Kp; Ki = _Ki; Kd = _Kd;
+  POn = _POn; PDir = _PDir;
+  ControlPin = _ControlPin;
     
   // Debug
   DBF(("UserControl::PIDSetpoint("));
@@ -165,8 +175,11 @@ void UserControl::PIDSetpoint(PinPoint *_OutPin, double _Kp, double _Ki, double 
  * @endcode
 **********************************************************************************************************************/
 void UserControl::LessThanSetpoint(PinPoint *_OutPin, PinPoint *_ControlPin = NULL ) {
+  
   if ( InPin == NULL ) return;
-  ControlType = LESS_THAN;  OutPin = _OutPin;  ControlPin = _ControlPin;
+  ControlType = LESS_THAN;
+  OutPin = _OutPin;
+  ControlPin = _ControlPin;
 
   // Debug
   DBF(("UserControl::LessThanSetpoint("));DB((InPin->DeviceName));DBF((":"));DB((InPin->Name));DBF((":"));
@@ -180,8 +193,11 @@ void UserControl::LessThanSetpoint(PinPoint *_OutPin, PinPoint *_ControlPin = NU
  * @endcode
 **********************************************************************************************************************/
 void UserControl::GreaterThanSetpoint(PinPoint *_OutPin, PinPoint *_ControlPin = NULL ) {
+  
   if ( InPin == NULL ) return;
-  ControlType = GREATER_THAN;  OutPin = _OutPin;  ControlPin = _ControlPin;
+  ControlType = GREATER_THAN;
+  OutPin = _OutPin;
+  ControlPin = _ControlPin;
 
   // Debug
   DBF(("UserControl::GreaterThanSetpoint("));DB((InPin->DeviceName));DBF((":"));DB((InPin->Name));DBF((":"));
@@ -195,8 +211,11 @@ void UserControl::GreaterThanSetpoint(PinPoint *_OutPin, PinPoint *_ControlPin =
  * @endcode
 **********************************************************************************************************************/
 void UserControl::EqualToSetpoint(PinPoint *_OutPin, PinPoint *_ControlPin = NULL ) {
+  
   if ( InPin == NULL ) return;
-  ControlType = EQUAL_TO;  OutPin = _OutPin;  ControlPin = _ControlPin;
+  ControlType = EQUAL_TO;
+  OutPin = _OutPin;
+  ControlPin = _ControlPin;
 
   // Debug
   DBF(("UserControl::EqualToSetpoint("));DB((InPin->DeviceName));DBF((":"));DB((InPin->Name));
@@ -211,8 +230,11 @@ void UserControl::EqualToSetpoint(PinPoint *_OutPin, PinPoint *_ControlPin = NUL
  * @endcode
 **********************************************************************************************************************/
 void UserControl::NotEqualToSetpoint(PinPoint *_OutPin, PinPoint *_ControlPin = NULL ) {
+  
   if ( InPin == NULL ) return;
-  ControlType = NOT_EQUAL_TO;  OutPin = _OutPin;  ControlPin = _ControlPin;
+  ControlType = NOT_EQUAL_TO;
+  OutPin = _OutPin;
+  ControlPin = _ControlPin;
 
   // Debug
   DBF(("UserControl::NotEqualToSetpoint("));DB((InPin->DeviceName));DBF((":"));DB((InPin->Name));
@@ -246,28 +268,28 @@ void UserControl::Apply(bool ManualApply = false) {
   switch ( ControlType ) {
     
     case LESS_THAN:
-      if ( InputValue < Setpoint ) { OutPin->SetTo(1000); }
+      if ( InputValue < mSetpoint ) { OutPin->SetTo(1000); }
       else { OutPin->SetTo(0); }
       break;
       
     case GREATER_THAN:
-      if ( InputValue > Setpoint ) { OutPin->SetTo(1000); }
+      if ( InputValue > mSetpoint ) { OutPin->SetTo(1000); }
       else { OutPin->SetTo(0); }
       break;
       
     case EQUAL_TO:
-      if ( InputValue == Setpoint ) { OutPin->SetTo(1000); }
+      if ( InputValue == mSetpoint ) { OutPin->SetTo(1000); }
       else { OutPin->SetTo(0); }
       break;
       
     case NOT_EQUAL_TO:
-      if ( InputValue != Setpoint ) { OutPin->SetTo(1000); }
+      if ( InputValue != mSetpoint ) { OutPin->SetTo(1000); }
       else { OutPin->SetTo(0); }
       break;
       
     case SET_PIN:
       if ( ManualApply ) {
-        OutPin->SetTo(Setpoint);                    // Only apply SET_PIN Manually
+        OutPin->SetTo(mSetpoint);                    // Only apply SET_PIN Manually
         InPin->CurrControl = NULL;                          // After Manual Set exit Control
       }
       break;
@@ -275,7 +297,7 @@ void UserControl::Apply(bool ManualApply = false) {
     case PID_SET:
       if ( PIDControl != NULL ) {
         PIDInput = double(InputValue);
-        PIDSet = double(Setpoint);
+        PIDSet = double(mSetpoint);
         unsigned long now=millis();
         PIDControl->SetSampleTime( now - PIDLastCompute );
         PIDLastCompute = now;
@@ -283,14 +305,14 @@ void UserControl::Apply(bool ManualApply = false) {
         else { DBL((F("UserControl::Apply(PID_SET - No Compute)"))); }
 
         // Debug message
-        DB((F("UserControl::Apply(PID_SET,")));DB((PIDInput));DBC;DB((Setpoint));DBC;DB((PIDOutput));DBC;
+        DB((F("UserControl::Apply(PID_SET,")));DB((PIDInput));DBC;DB((mSetpoint));DBC;DB((PIDOutput));DBC;
         if ( PIDControl->GetMode() == AUTOMATIC ) { DB((F("AUTOMATIC"))); } else { DB((F("MANUAL"))); }
         DBL((F(")")));
       }
       break;
       
     case SET_CONTROLLER:
-      if ( ManualApply ) { OutPin->SetTo(Setpoint, mStatus); }
+      if ( ManualApply ) { OutPin->SetTo(mSetpoint, mStatus); }
       break;
   }
 }
@@ -307,8 +329,8 @@ void UserControl::Apply(bool ManualApply = false) {
  * @endcode
 **********************************************************************************************************************/
 void UserControl::SetPoint(int _Set) {
-  Setpoint = _Set;
-  if ( ControlPin != NULL ) ControlPin->SetTo(Setpoint, mStatus);    // Make Set on ControlPin
+  mSetpoint = _Set;
+  if ( ControlPin != NULL ) ControlPin->SetTo(mSetpoint, mStatus);    // Make Set on ControlPin
   Display();
 }
 
@@ -320,12 +342,12 @@ void UserControl::SetPoint(int _Set) {
  * @endcode
 **********************************************************************************************************************/
 int UserControl::SetPoint() {
-  if ( ControlPin != NULL ) { Setpoint = ControlPin->GetRawValue(); } // Retreive SetPoint from ControlPin
-  return Setpoint;
+  if ( ControlPin != NULL ) { mSetpoint = ControlPin->GetRawValue(); } // Retreive SetPoint from ControlPin
+  return mSetpoint;
 }
 
 /******************************************************************************************************************//**
- * @brief Adds or Subtracts to the Setpoint using the Modified Display Value and updates the Display
+ * @brief Adds or Subtracts to the mSetpoint using the Modified Display Value and updates the Display
  * @remarks
  * @code
  *   exmaple code
@@ -333,19 +355,19 @@ int UserControl::SetPoint() {
 **********************************************************************************************************************/
 void UserControl::SetPointAdd(int AddValue) {
   if ( InPin->IsOnOff ) {
-    if ( Setpoint != 0 ) { Setpoint = 0; }
-    else { Setpoint = 1; }
+    if ( mSetpoint != 0 ) { mSetpoint = 0; }
+    else { mSetpoint = 1; }
   } else {
-    // Adjust Setpoint according to Modified Value
-    int ModStart = InPin->ModifyValue(Setpoint);
+    // Adjust mSetpoint according to Modified Value
+    int ModStart = InPin->ModifyValue(mSetpoint);
     if ( AddValue < 0 ) {
-      while ( InPin->ModifyValue(Setpoint) > ModStart + AddValue ) { Setpoint--; }
+      while ( InPin->ModifyValue(mSetpoint) > ModStart + AddValue ) { mSetpoint--; }
     } else if ( AddValue > 0 ) {
-      while ( InPin->ModifyValue(Setpoint) < ModStart + AddValue ) { Setpoint++; }
+      while ( InPin->ModifyValue(mSetpoint) < ModStart + AddValue ) { mSetpoint++; }
     }
-    if ( Setpoint < 0 ) Setpoint = 0;
+    if ( mSetpoint < 0 ) mSetpoint = 0;
   }
-  if ( ControlPin != NULL ) ControlPin->SetTo(Setpoint, mStatus);
+  if ( ControlPin != NULL ) ControlPin->SetTo(mSetpoint, mStatus);
 
   Display();
 }
@@ -369,7 +391,7 @@ void UserControl::Status(PinStatus _Status) {
     mStatus = ISOFF;
     if ( ControlType == PID_SET ) PIDControl->SetMode(MANUAL); 
   }
-  if ( ControlPin != NULL ) ControlPin->SetTo(Setpoint, mStatus);
+  if ( ControlPin != NULL ) ControlPin->SetTo(mSetpoint, mStatus);
   if ( mStatus == ISON && ID != NULL ) { OnControls[ObjectIndex] = ID; } 
   else { OnControls[ObjectIndex] = ' '; }
 
@@ -416,7 +438,7 @@ void UserControl::Display() {
     else { LCD->setCursor(13,0);LCD->print("Off"); }
   }
   
-  //Display the Pin and Setpoint
+  //Display the Pin and mSetpoint
   LCD->setCursor(0,1);LCD->print( InPin->Name );LCD->print(" ");
     
     switch ( ControlType ) {
@@ -428,7 +450,6 @@ void UserControl::Display() {
       case EQUAL_TO:        LCD->print(char(225));LCD->print("=");break; // 225 = a-dots
       case NOT_EQUAL_TO:    LCD->print(char(225));LCD->print(char(183));break; // 225 = a-dots, 183 = slashed =
     }
-    //ISOFF = 0, ISON = 1, ERR = 2, OKAY = 3
 
     if ( Status() == ERR ) { LCD->print("ERR"); }
     else {

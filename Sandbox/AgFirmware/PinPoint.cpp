@@ -280,7 +280,11 @@ void  PinPoint::Display() {
   LCD->print( DeviceName );
 
   // Display OnControls
-  if ( PinMode != CONTROLLER ) {
+  if ( PinMode == CONTROLLER ) {
+    if ( mStatus == ISON ) { LCD->setCursor(14,0);LCD->print("On"); }
+    else if ( mStatus == ISOFF ) { LCD->setCursor(13,0);LCD->print("Off"); }
+    else if ( mStatus == ERR ) { LCD->setCursor(15,0);LCD->print("?"); }
+  } else {
     int lastspace = 15 - strlen( DeviceName ); int pos = 15;
     for ( int Idx = 15; Idx >= 0; Idx-- ) {
       if ( UserControl::OnControls[Idx] != NULL ) {
@@ -290,10 +294,6 @@ void  PinPoint::Display() {
         }
       }
     }
-  } else {
-    if ( mStatus == ISON ) { LCD->setCursor(14,0);LCD->print("On"); }
-    else if ( mStatus == ISOFF ) { LCD->setCursor(13,0);LCD->print("Off"); }
-    else if ( mStatus == ERR ) { LCD->setCursor(15,0);LCD->print("?"); }
   }
   
   //Display the Pin Name ( Bottom Row )
@@ -301,14 +301,12 @@ void  PinPoint::Display() {
 
   // Display Value
   if ( mState == WAIT ) { LCD->print("?"); }
-  else if ( mState == READY ) {
-    if ( mState == ERR ) { LCD->print("ERR"); }
-    else if ( IsOnOff ) {
-      if ( mValue == 0 ) { LCD->print("Off"); }
-      else { LCD->print("On"); }
-    } else {
-      LCD->print(GetModifiedValue());
-    }
-  }   
+  else if ( mStatus == ERR ) { LCD->print("ERR"); }
+  else if ( IsOnOff ) {
+    if ( mValue == 0 ) { LCD->print("Off"); }
+    else { LCD->print("On"); }
+  } else {
+    LCD->print(GetModifiedValue());
+  }
 }
 

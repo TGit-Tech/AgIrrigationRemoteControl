@@ -52,7 +52,7 @@ class UserControl {
     PinPoint              *ControlPin = NULL;               // The Controls SetPoint on a Store Pin for remote access to the Control
 
   private:  
-    int                   Setpoint = 0;                     // Notice lower-case 'p'
+    int                   mSetpoint = 0;                    // Notice lower-case 'p'
     PinStatus             mStatus = OKAY;                   // PeerIOSerialControl::enum PinStatus { ISOFF = 0, ISON = 1, ERR = 2, OKAY = 3 };
     LiquidCrystal         *LCD = NULL;
     
