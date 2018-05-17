@@ -98,22 +98,22 @@ int PacketID = -1;                                          // For non-blocking 
 #define MAX_MENU_ITEMS 15                 // Maximum number of Menu Items allowed ( using 71% dynamic memory )
 #define MAXOPTIONS 2                      // Maximum number of Menu Item Options allowed
 struct uDevices {
-  char            *Text;                  // Text to designate the Unit a Menu Item will control
+  const char      *Text;                  // Text to designate the Unit a Menu Item will control
   int             TransceiverID = 0;      // The TransceiverID set on the Unit the Menu Item will control
 };
 struct uMenuOption {
-  char            *Text;                  // Text display for this-one Menu-Item OPTION
+  const char      *Text;                  // Text display for this-one Menu-Item OPTION
   int             Value = LOW;            // A value used for this OPTION ( HIGH-1/LOW-0 for ON/OFF / TransieverID)
 };
 struct uSubVal {
   int             Value = -1;             // Value Pin for Val[MAIN, SET, HIALARM, LOALARM]
   int             ToneHz = 1000;          // A tone frequency associated with this alarm when activated
-  char            ID = NULL;              // Character to IDentify an alarm; setting an ID makes an alarm SETTABLE
+  char            ID = 0;                 // Character to IDentify an alarm; setting an ID makes an alarm SETTABLE
   bool            State = false;          // [MAIN]State=VALID, [SET]State=SETTABLE, [xxALARM]=ON
 };
 struct MenuItems {
   uDevices        Device;                 // The device the Menu Item is for
-  char            *Text;                  // The text to display on the LCD for this Menu item
+  const char      *Text;                  // The text to display on the LCD for this Menu item
   uint8_t         Pin = NOPIN;            // Where to get/set the MAIN-Value; LOCAL, REMOTE, NOPIN, etc...
   uSubVal         Sub[4];                 // MAIN, SET, LOALARM, HIALARM - Value storage per Menu Item
   uMenuOption     Option[MAXOPTIONS];     // Selectable options like ON/OFF, Pump1 or 2 etc..
@@ -137,8 +137,8 @@ uDevices HandRemote, CanalPump, DitchPump;                  // Name and Define a
 void SetupMenu() {
 
   HandRemote.Text = "Hand Remote"; HandRemote.TransceiverID = TRANSCEIVER_ID;
-  DitchPump.Text = "Ditch Pump"; DitchPump.TransceiverID = 10;
-  CanalPump.Text = "Canal Pump"; CanalPump.TransceiverID = 11;
+  DitchPump.Text = "Ditch Pump"; DitchPump.TransceiverID = 11;
+  CanalPump.Text = "Canal Pump"; CanalPump.TransceiverID = 10;
   
   //BATT (idx-0) ----------------------------
   Menu[BATT].Device = HandRemote;
@@ -216,7 +216,7 @@ void SetupMenu() {
   */
   //------------[ Start-Up the Display ( DO NOT CHANGE! )]-------------  
   for ( int i = 0; i <= MenuItemsIdx; i++ ) {
-    if ( Menu[i].Sub[LOALARM].ID != NULL || Menu[i].Sub[HIALARM].ID != NULL ) {
+    if ( Menu[i].Sub[LOALARM].ID != 0 || Menu[i].Sub[HIALARM].ID != 0 ) {
       EEPROMGet(i);                                         // Load Alarm values from EEPROM
     }
   }
@@ -308,7 +308,7 @@ void EEPROMSet(int i = -1) {
  *   exmaple code
  * @endcode
 **********************************************************************************************************************/
-void EEPROMGet(int i = -1) {
+void EEPROMGet(int i) {
   byte StatusByte = 0;
   if ( i == -1 ) i = idx;DB(("EEPROMGet("));DB((i));DB((")"));
   int iOffset = (i*5);                                          // (5)Bytes per Menu Item
@@ -340,7 +340,7 @@ void EEPROMGet(int i = -1) {
  *   exmaple code
  * @endcode
 **********************************************************************************************************************/
-void GetItem(int i = -1) {
+void GetItem(int i) {
   
   if ( i == -1 ) i = idx;                                                         // Default index = global 'idx'
   DB(("GetItem("));DB((i));DBL((")"));                
@@ -391,14 +391,14 @@ void GetItem(int i = -1) {
  *   exmaple code
  * @endcode
 **********************************************************************************************************************/
-void CheckAlarms(int i = -1) {
+void CheckAlarms(int i) {
   if ( i == -1 ) i = idx;                                                         // Default index = global 'idx'
   DB(("AlarmCheck("));DB((i));DBL((")"));
   
   if ( !bIterating ) return;                                                      // No Alarms unless iterating
   bool bOption = ( Menu[i].LastOptionIdx > 0 );
-  bool bLoAlarmOn = ( Menu[i].Sub[LOALARM].State == ON && Menu[i].Sub[LOALARM].ID != NULL );
-  bool bHiAlarmOn = ( Menu[i].Sub[HIALARM].State == ON && Menu[i].Sub[HIALARM].ID != NULL );
+  bool bLoAlarmOn = ( Menu[i].Sub[LOALARM].State == ON && Menu[i].Sub[LOALARM].ID != 0 );
+  bool bHiAlarmOn = ( Menu[i].Sub[HIALARM].State == ON && Menu[i].Sub[HIALARM].ID != 0 );
 
   if ( bOption && bHiAlarmOn ) AlarmActive = ( Menu[i].Sub[MAIN].Value != Menu[i].Sub[HIALARM].Value ); // NOT-EQUAL
   
@@ -484,9 +484,9 @@ void LCD_display() {
   // Right Side Alarm Identifiers
   int pos = 15;
   for (int i=0;i<=MenuItemsIdx;i++) {
-    if ( Menu[i].Sub[LOALARM].State == ON && Menu[i].Sub[LOALARM].ID != NULL ) {
+    if ( Menu[i].Sub[LOALARM].State == ON && Menu[i].Sub[LOALARM].ID != 0 ) {
         lcd.setCursor(pos,0);lcd.print(Menu[i].Sub[LOALARM].ID);pos--;}
-    if ( Menu[i].Sub[HIALARM].State == ON && Menu[i].Sub[HIALARM].ID != NULL ) {
+    if ( Menu[i].Sub[HIALARM].State == ON && Menu[i].Sub[HIALARM].ID != 0 ) {
         lcd.setCursor(pos,0);lcd.print(Menu[i].Sub[HIALARM].ID);pos--;}
   }
        
@@ -541,7 +541,7 @@ void LCD_display() {
 **********************************************************************************************************************/
 void ButtonCheck(int adc_value) {
   unsigned long clk = millis();
-  if ( clk - last_bpress_millis < 200 ) return;         // Debounce button presses
+  if ( clk - last_bpress_millis < 350 ) return;         // Debounce button presses
 
   if (adc_value > 1000) { last_bpress = NONE; }
   else if (adc_value < 50) { last_bpress = RIGHT; }
@@ -657,7 +657,7 @@ void loop(){
             i++;                                                // Increment Menu Item
             if(i>MenuItemsIdx) i=0;                             // When reaching the end of Menu Items
             if(i == idx) break;                                 // break if we've made a full rotation
-          } while (Menu[i].Sub[LOALARM].ID == NULL && Menu[i].Sub[HIALARM].ID == NULL);
+          } while (Menu[i].Sub[LOALARM].ID == 0 && Menu[i].Sub[HIALARM].ID == 0);
           
           idx=i;                                            // --- Now; set new 'idx' to the one with an Alarm ID
           PacketID = -1;                                    // Clear the previous PacketID; We're moving
@@ -724,8 +724,8 @@ void loop(){
     } else if (bpress == RIGHT) {
       SubIdx++;
       if ( SubIdx == SET && Menu[idx].Sub[SET].State != SETTABLE ) SubIdx++;    // Skip SET if not SETTABLE
-      if ( SubIdx == LOALARM && Menu[idx].Sub[LOALARM].ID == NULL ) SubIdx++;   // Skip LOALARM if not Identified
-      if ( SubIdx == HIALARM && Menu[idx].Sub[HIALARM].ID == NULL ) SubIdx++;   // Skip HIALARM if not Identified
+      if ( SubIdx == LOALARM && Menu[idx].Sub[LOALARM].ID == 0 ) SubIdx++;   // Skip LOALARM if not Identified
+      if ( SubIdx == HIALARM && Menu[idx].Sub[HIALARM].ID == 0 ) SubIdx++;   // Skip HIALARM if not Identified
       if ( SubIdx > HIALARM ) SubIdx = MAIN;
       if ( Menu[idx].Sub[MAIN].State == VALID ) {
         if ( SubIdx == SET && Menu[idx].Sub[SET].Value < 0 ) Menu[idx].Sub[SET].Value = Menu[idx].Sub[MAIN].Value; // Make SET value MAIN value instead of ERR
@@ -737,8 +737,8 @@ void loop(){
     } else if (bpress == LEFT) {
       SubIdx--;if (SubIdx<0) SubIdx=0;
       if ( SubIdx == SET && Menu[idx].Sub[SET].State != SETTABLE ) SubIdx--;    // Skip SET if not SETTABLE
-      if ( SubIdx == LOALARM && Menu[idx].Sub[LOALARM].ID == NULL ) SubIdx--;   // Skip LOALARM if not identified
-      if ( SubIdx == HIALARM && Menu[idx].Sub[HIALARM].ID == NULL ) SubIdx--;   // Skip HIALARM if not identified
+      if ( SubIdx == LOALARM && Menu[idx].Sub[LOALARM].ID == 0 ) SubIdx--;   // Skip LOALARM if not identified
+      if ( SubIdx == HIALARM && Menu[idx].Sub[HIALARM].ID == 0 ) SubIdx--;   // Skip HIALARM if not identified
       if ( SubIdx < MAIN ) SubIdx = MAIN;
       if ( SubIdx == MAIN && Menu[idx].Sub[MAIN].State != VALID ) GetItem();
     }
