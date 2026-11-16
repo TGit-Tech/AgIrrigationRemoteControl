@@ -1,6 +1,10 @@
 # AgIrrigationRemoteControl
 Control an Ag Industrial 3-Phase Irrigation Pump with Arduino UNO and XBee RF
 
+NOTE:  THIS PROJECT IS LEGACY.  See [Tode-RC](https://github.com/TGit-Tech/Tode-RC) for Current Project.
+ALSO NOTE: Instead of using an SSR for 3-Phase Pumps; use a High Power Mechanical Relay.
+There is some skepticism about whether long term SSR usage is causing random Contactor destruction.
+
 ![Hand Remote](/pics/Hand_PumpControl_Units.png)
 # Overview
 - A solid rural 2-Mile range; possibly more ( 900MHz @ 1/4-Watt Transceiver )
@@ -16,17 +20,12 @@ Control an Ag Industrial 3-Phase Irrigation Pump with Arduino UNO and XBee RF
 - Simple expansion of a digital pressure gauge for water pressure monitoring
 - Simple expansion of an Ultrasonic distance meter for water level monitoring
 
-# I'll Build one for you!
-I'll be building a few of these units complete with
+# The Installation Kit
 - (1) Hand-Remote; Custom programmed to your irrigation setup
 - (1) Pump-Controller; Custom programmed to your irrigation setup
 - (1) Installation Kit including:
     - The required 480VAC 3-phase Power Supply
     - A 480VAC or higher Solid State Relay for Motor Starter Control
     - 600V THHN Hook-Up wire required to Motor control installation
-
-Purchase for $329 at: https://www.etsy.com/listing/525674784/agriculture-3-phase-480vac-irrigation
-
-If you'd like to purchase just a single unit or the Water-Level and Pressure expansion kits; you can email me directly at tgit28@gmail.com
 
 ![Installation Kit](/pics/InstallationKit.jpg)
